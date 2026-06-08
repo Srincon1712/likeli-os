@@ -41,6 +41,8 @@ export function migrate() {
       instagram TEXT DEFAULT '',
       website TEXT DEFAULT '',
       notes TEXT DEFAULT '',
+      call_note TEXT DEFAULT '',
+      callback_date TEXT,
       status TEXT NOT NULL DEFAULT 'new',
       call_count INTEGER NOT NULL DEFAULT 0,
       last_call_at TEXT,
@@ -65,6 +67,12 @@ export function migrate() {
   const leadColumns = db.prepare('PRAGMA table_info(leads)').all().map((column) => column.name);
   if (!leadColumns.includes('website')) {
     db.prepare("ALTER TABLE leads ADD COLUMN website TEXT DEFAULT ''").run();
+  }
+  if (!leadColumns.includes('call_note')) {
+    db.prepare("ALTER TABLE leads ADD COLUMN call_note TEXT DEFAULT ''").run();
+  }
+  if (!leadColumns.includes('callback_date')) {
+    db.prepare("ALTER TABLE leads ADD COLUMN callback_date TEXT").run();
   }
 }
 

@@ -1,5 +1,5 @@
 import { ArrowLeft, ArrowRight, Clipboard, MessageCircle, Upload } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { Header, StatCard } from './Shell.jsx';
 
 const outcomes = [
@@ -14,6 +14,12 @@ export function ColdCalling({ leads, analytics, onImport, onLogCall, onUpdateLea
   const [index, setIndex] = useState(0);
   const [nextCallAt, setNextCallAt] = useState('');
   const [note, setNote] = useState('');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalType, setModalType] = useState('note'); // 'note' or 'callback'
+  const [pendingOutcome, setPendingOutcome] = useState(null);
+  const [modalNote, setModalNote] = useState('');
+  const [modalCallbackDate, setModalCallbackDate] = useState('');
+  const modalRef = useRef(null);
   const activeLead = leads[index] || null;
   const callableLeads = useMemo(() => leads.filter((lead) => lead.status !== 'dead' && lead.status !== 'closed').length, [leads]);
 
@@ -32,6 +38,114 @@ export function ColdCalling({ leads, analytics, onImport, onLogCall, onUpdateLea
     setNextCallAt('');
     setIndex((current) => Math.min(current + 1, Math.max(leads.length - 1, 0)));
   }
+
+  // helper to detect if user is typing in an input/textarea/contenteditable
+  function isTyping() {
+    const el = document.activeElement;
+    if (!el) return false;
+    const tag = el.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable;
+  }
+
+  async function saveCallDirect(outcome, payload = {}) {
+    if (!activeLead) return;
+    await onLogCall(activeLead.id, { outcome, next_call_at: payload.next_call_at || null, note: payload.note || '' , callback_date: payload.callback_date || null});
+    // reset modal fields
+    setModalNote('');
+    setModalCallbackDate('');
+    setModalOpen(false);
+    setIndex((current) => Math.min(current + 1, Math.max(leads.length - 1, 0)));
+  }
+
+  function openModalFor(outcome) {
+    setPendingOutcome(outcome);
+    setModalNote('');
+    setModalCallbackDate('');
+    if (outcome === 'callback') setModalType('callback');
+    else setModalType('note');
+    setModalOpen(true);
+    // focus will be set after render
+  }
+
+  useEffect(() => {
+    if (modalOpen && modalRef.current) {
+      const ta = modalRef.current.querySelector('textarea, input');
+      if (ta) ta.focus();
+    }
+  }, [modalOpen]);
+
+  useEffect(() => {
+    function handler(e) {
+      if (modalOpen) {
+        // while modal open, handle ESC and Enter for save
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          setModalOpen(false);
+          return;
+        }
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          // submit modal
+          if (pendingOutcome) {
+            if (modalType === 'callback') {
+              if (!modalCallbackDate || !modalNote.trim()) return;
+              saveCallDirect(pendingOutcome, { next_call_at: modalCallbackDate, note: modalNote, callback_date: modalCallbackDate });
+            } else {
+              if (!modalNote.trim()) return;
+              saveCallDirect(pendingOutcome, { note: modalNote });
+            }
+          }
+        }
+        return;
+      }
+
+      if (isTyping()) return;
+
+      // navigation
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        setIndex((i) => Math.min(i + 1, Math.max(leads.length - 1, 0)));
+        return;
+      }
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        setIndex((i) => Math.max(i - 1, 0));
+        return;
+      }
+
+      // shortcuts
+      const k = e.key.toLowerCase();
+      if (k === ' ') {
+        e.preventDefault();
+        // No contestó: immediate
+        saveCallDirect('no_answer', { note: '' });
+        return;
+      }
+      if (k === 'q') {
+        e.preventDefault();
+        openModalFor('interested');
+        return;
+      }
+      if (k === 'w') {
+        e.preventDefault();
+        openModalFor('callback');
+        return;
+      }
+      if (k === 'e') {
+        e.preventDefault();
+        openModalFor('closed');
+        return;
+      }
+      if (k === 'r') {
+        e.preventDefault();
+        openModalFor('dead');
+        return;
+      }
+    }
+
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [leads.length, modalOpen, modalType, modalNote, modalCallbackDate, pendingOutcome, activeLead]);
 
   function copyPhone() {
     if (!activeLead?.phone) return;
@@ -112,7 +226,11 @@ export function ColdCalling({ leads, analytics, onImport, onLogCall, onUpdateLea
 
               <div className="mt-5 grid gap-3 sm:grid-cols-5">
                 {outcomes.map((outcome) => (
-                  <button key={outcome.id} onClick={() => log(outcome.id)} className="rounded-lg border border-signal/20 bg-signal/[0.08] px-3 py-3 text-sm text-ice hover:bg-signal/15">
+                  <button
+                    key={outcome.id}
+                    onClick={() => (outcome.id === 'no_answer' ? saveCallDirect('no_answer', { note: '' }) : openModalFor(outcome.id))}
+                    className="rounded-lg border border-signal/20 bg-signal/[0.08] px-3 py-3 text-sm text-ice hover:bg-signal/15"
+                  >
                     {outcome.label}
                   </button>
                 ))}
@@ -154,6 +272,43 @@ export function ColdCalling({ leads, analytics, onImport, onLogCall, onUpdateLea
           ) : null}
         </aside>
       </div>
+      {modalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70" onClick={() => setModalOpen(false)} />
+          <div ref={modalRef} className="glass relative z-10 w-full max-w-lg rounded-lg p-6">
+            <h3 className="text-lg font-medium text-white mb-3">{modalType === 'callback' ? 'Schedule callback' : 'Add call note'}</h3>
+            <div className="space-y-3">
+              {modalType === 'callback' ? (
+                <div>
+                  <label className="text-sm text-slate-400">Fecha y hora de callback</label>
+                  <input className="field mt-1 w-full" type="datetime-local" value={modalCallbackDate} onChange={(e) => setModalCallbackDate(e.target.value)} />
+                </div>
+              ) : null}
+              <div>
+                <label className="text-sm text-slate-400">Nota (obligatoria)</label>
+                <textarea className="field mt-1 w-full min-h-24 resize-none" value={modalNote} onChange={(e) => setModalNote(e.target.value)} />
+              </div>
+              <div className="mt-4 flex justify-end gap-2">
+                <button className="rounded-lg border border-white/10 px-4 py-2 text-sm text-slate-300" onClick={() => setModalOpen(false)}>Cerrar (ESC)</button>
+                <button
+                  className="rounded-lg bg-signal px-4 py-2 text-sm text-white"
+                  onClick={() => {
+                    if (modalType === 'callback') {
+                      if (!modalCallbackDate || !modalNote.trim()) return;
+                      saveCallDirect(pendingOutcome, { next_call_at: modalCallbackDate, note: modalNote, callback_date: modalCallbackDate });
+                    } else {
+                      if (!modalNote.trim()) return;
+                      saveCallDirect(pendingOutcome, { note: modalNote });
+                    }
+                  }}
+                >
+                  Guardar (ENTER)
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

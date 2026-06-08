@@ -26,7 +26,7 @@ app.use(cors());
 app.use(express.json());
 
 const objectiveFields = ['title', 'description', 'category', 'target_value', 'current_value', 'deadline', 'status'];
-const leadFields = ['business_name', 'phone', 'city', 'niche', 'instagram', 'website', 'notes', 'status', 'call_count', 'last_call_at', 'next_call_at'];
+const leadFields = ['business_name', 'phone', 'city', 'niche', 'instagram', 'website', 'notes', 'call_note', 'callback_date', 'status', 'call_count', 'last_call_at', 'next_call_at'];
 
 function mapObjective(row) {
   const progress = row.target_value > 0 ? Math.min(100, Math.round((row.current_value / row.target_value) * 100)) : 0;
@@ -177,7 +177,7 @@ app.patch('/api/leads/:id', (req, res) => {
   const update = db.prepare(`
     UPDATE leads
     SET business_name = @business_name, phone = @phone, city = @city, niche = @niche,
-        instagram = @instagram, website = @website, notes = @notes, status = @status, call_count = @call_count,
+        instagram = @instagram, website = @website, notes = @notes, call_note = @call_note, callback_date = @callback_date, status = @status, call_count = @call_count,
         last_call_at = @last_call_at, next_call_at = @next_call_at, updated_at = @updated_at
     WHERE id = @id
   `);
@@ -190,6 +190,8 @@ app.patch('/api/leads/:id', (req, res) => {
     instagram: next.instagram || '',
     website: next.website || '',
     notes: next.notes || '',
+    call_note: next.call_note || '',
+    callback_date: next.callback_date || null,
     status: next.status || 'new',
     call_count: Number(next.call_count || 0),
     last_call_at: next.last_call_at || null,
@@ -211,15 +213,16 @@ app.post('/api/leads/:id/call', (req, res) => {
   const outcome = req.body.outcome || 'no_answer';
   const nextCallAt = req.body.next_call_at || null;
   const note = req.body.note || '';
+  const callbackDate = req.body.callback_date || req.body.callback_date || null;
   const callTime = nowIso();
 
   const saveCall = db.transaction(() => {
     db.prepare('INSERT INTO call_events (lead_id, outcome, note, created_at) VALUES (?, ?, ?, ?)').run(lead.id, outcome, note, callTime);
     db.prepare(`
       UPDATE leads
-      SET status = ?, call_count = call_count + 1, last_call_at = ?, next_call_at = ?, updated_at = ?
+      SET status = ?, call_count = call_count + 1, last_call_at = ?, next_call_at = ?, callback_date = ?, call_note = ?, updated_at = ?
       WHERE id = ?
-    `).run(outcome, callTime, nextCallAt, callTime, lead.id);
+    `).run(outcome, callTime, nextCallAt, callbackDate, note, callTime, lead.id);
     return db.prepare('SELECT * FROM leads WHERE id = ?').get(lead.id);
   });
 
