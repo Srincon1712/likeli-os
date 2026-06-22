@@ -19,6 +19,12 @@ db.pragma('foreign_keys = ON');
 
 export function migrate() {
   db.exec(`
+    CREATE TABLE IF NOT EXISTS lead_stages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS objectives (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT NOT NULL,
@@ -47,8 +53,10 @@ export function migrate() {
       call_count INTEGER NOT NULL DEFAULT 0,
       last_call_at TEXT,
       next_call_at TEXT,
+      stage_id INTEGER,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (stage_id) REFERENCES lead_stages(id)
     );
 
     CREATE TABLE IF NOT EXISTS call_events (
@@ -64,6 +72,12 @@ export function migrate() {
     CREATE INDEX IF NOT EXISTS idx_call_events_created ON call_events(created_at);
   `);
 
+  let initialStage = db.prepare('SELECT id FROM lead_stages ORDER BY id ASC LIMIT 1').get();
+  if (!initialStage) {
+    const result = db.prepare("INSERT INTO lead_stages (name) VALUES ('Etapa 1')").run();
+    initialStage = { id: Number(result.lastInsertRowid) };
+  }
+
   const leadColumns = db.prepare('PRAGMA table_info(leads)').all().map((column) => column.name);
   if (!leadColumns.includes('website')) {
     db.prepare("ALTER TABLE leads ADD COLUMN website TEXT DEFAULT ''").run();
@@ -74,6 +88,12 @@ export function migrate() {
   if (!leadColumns.includes('callback_date')) {
     db.prepare("ALTER TABLE leads ADD COLUMN callback_date TEXT").run();
   }
+  if (!leadColumns.includes('stage_id')) {
+    db.prepare('ALTER TABLE leads ADD COLUMN stage_id INTEGER REFERENCES lead_stages(id)').run();
+  }
+
+  db.prepare('UPDATE leads SET stage_id = ? WHERE stage_id IS NULL').run(initialStage.id);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_leads_stage ON leads(stage_id)');
 }
 
 export function nowIso() {

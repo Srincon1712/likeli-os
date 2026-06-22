@@ -35,9 +35,19 @@ function mapObjective(row) {
 
 function listLeads(req, res) {
   const status = req.query.status;
-  const rows = status
-    ? db.prepare('SELECT * FROM leads WHERE status = ? ORDER BY updated_at DESC, id DESC').all(status)
-    : db.prepare('SELECT * FROM leads ORDER BY updated_at DESC, id DESC').all();
+  const stageId = Number(req.query.stage_id);
+  const filters = [];
+  const params = [];
+  if (status) {
+    filters.push('status = ?');
+    params.push(status);
+  }
+  if (stageId) {
+    filters.push('stage_id = ?');
+    params.push(stageId);
+  }
+  const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+  const rows = db.prepare(`SELECT * FROM leads ${where} ORDER BY updated_at DESC, id DESC`).all(...params);
   res.json(rows);
 }
 
@@ -46,13 +56,34 @@ function deleteLead(req, res) {
   res.status(204).end();
 }
 
-function deleteAllLeads(_req, res) {
-  const result = db.prepare('DELETE FROM leads').run();
+function deleteAllLeads(req, res) {
+  const stageId = Number(req.query.stage_id);
+  const result = stageId
+    ? db.prepare('DELETE FROM leads WHERE stage_id = ?').run(stageId)
+    : db.prepare('DELETE FROM leads').run();
   res.json({ deleted: result.changes });
 }
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, database: dbPath });
+});
+
+app.get('/api/stages', (_req, res) => {
+  const rows = db.prepare(`
+    SELECT lead_stages.*, COUNT(leads.id) AS lead_count
+    FROM lead_stages
+    LEFT JOIN leads ON leads.stage_id = lead_stages.id
+    GROUP BY lead_stages.id
+    ORDER BY lead_stages.id DESC
+  `).all();
+  res.json(rows);
+});
+
+app.post('/api/stages', (req, res) => {
+  const nextNumber = db.prepare('SELECT COUNT(*) AS count FROM lead_stages').get().count + 1;
+  const name = String(req.body.name || '').trim() || `Etapa ${nextNumber}`;
+  const result = db.prepare('INSERT INTO lead_stages (name) VALUES (?)').run(name);
+  res.status(201).json(db.prepare('SELECT *, 0 AS lead_count FROM lead_stages WHERE id = ?').get(result.lastInsertRowid));
 });
 
 app.get('/api/objectives', (_req, res) => {
@@ -116,6 +147,12 @@ app.get('/leads', listLeads);
 app.post('/api/leads/import', upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'CSV file is required' });
 
+  const requestedStageId = Number(req.body.stage_id);
+  const stage = requestedStageId
+    ? db.prepare('SELECT id FROM lead_stages WHERE id = ?').get(requestedStageId)
+    : db.prepare('SELECT id FROM lead_stages ORDER BY id DESC LIMIT 1').get();
+  if (!stage) return res.status(400).json({ error: 'Lead stage not found' });
+
   const content = fs.readFileSync(req.file.path, 'utf8');
   let headers = [];
   const records = parse(content, {
@@ -130,8 +167,8 @@ app.post('/api/leads/import', upload.single('file'), (req, res) => {
   const { detected, ignored } = analyzeCsvColumns(headers);
 
   const insert = db.prepare(`
-    INSERT INTO leads (business_name, phone, city, niche, instagram, website, notes, updated_at)
-    VALUES (@business_name, @phone, @city, @niche, @instagram, @website, @notes, @updated_at)
+    INSERT INTO leads (business_name, phone, city, niche, instagram, website, notes, stage_id, updated_at)
+    VALUES (@business_name, @phone, @city, @niche, @instagram, @website, @notes, @stage_id, @updated_at)
   `);
 
   const result = db.transaction((rows) => {
@@ -145,7 +182,7 @@ app.post('/api/leads/import', upload.single('file'), (req, res) => {
         continue;
       }
 
-      insert.run({ ...parsed.lead, updated_at: nowIso() });
+      insert.run({ ...parsed.lead, stage_id: stage.id, updated_at: nowIso() });
       imported += 1;
     }
 
@@ -234,7 +271,11 @@ app.get('/api/calls/history/:leadId', (req, res) => {
   res.json(rows);
 });
 
-app.get('/api/analytics', (_req, res) => {
+app.get('/api/analytics', (req, res) => {
+  const stageId = Number(req.query.stage_id);
+  const leadWhere = stageId ? 'WHERE stage_id = ?' : '';
+  const leadParams = stageId ? [stageId] : [];
+  const callJoinWhere = stageId ? 'JOIN leads ON leads.id = call_events.lead_id WHERE leads.stage_id = ?' : '';
   const objectiveRows = db.prepare('SELECT * FROM objectives').all().map(mapObjective);
   const totalObjectives = objectiveRows.length;
   const completedObjectives = objectiveRows.filter((item) => item.status === 'completed' || item.progress >= 100).length;
@@ -242,22 +283,23 @@ app.get('/api/analytics', (_req, res) => {
     ? Math.round(objectiveRows.reduce((sum, item) => sum + item.progress, 0) / totalObjectives)
     : 0;
 
-  const leadCounts = db.prepare('SELECT status, COUNT(*) as count FROM leads GROUP BY status').all();
+  const leadCounts = db.prepare(`SELECT status, COUNT(*) as count FROM leads ${leadWhere} GROUP BY status`).all(...leadParams);
   const statusCounts = Object.fromEntries(leadCounts.map((row) => [row.status, row.count]));
-  const callsTotal = db.prepare('SELECT COUNT(*) as count FROM call_events').get().count;
+  const callsTotal = db.prepare(`SELECT COUNT(*) as count FROM call_events ${callJoinWhere}`).get(...leadParams).count;
   const responded = (statusCounts.interested || 0) + (statusCounts.callback || 0) + (statusCounts.closed || 0);
   const conversion = callsTotal ? Math.round(((statusCounts.closed || 0) / callsTotal) * 100) : 0;
   const responseRate = callsTotal ? Math.round((responded / callsTotal) * 100) : 0;
   const callsByDay = db.prepare(`
     SELECT * FROM (
-      SELECT substr(created_at, 1, 10) as day, COUNT(*) as calls
+      SELECT substr(call_events.created_at, 1, 10) as day, COUNT(*) as calls
       FROM call_events
+      ${callJoinWhere}
       GROUP BY day
       ORDER BY day DESC
       LIMIT 30
     )
     ORDER BY day ASC
-  `).all();
+  `).all(...leadParams);
 
   const monthlyCompleted = db.prepare(`
     SELECT COUNT(*) as count FROM objectives

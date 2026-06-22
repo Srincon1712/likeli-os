@@ -45,8 +45,8 @@ export function LeadDatabase({ leads, onDeleteLead, onDeleteAllLeads }) {
   }
 
   async function deleteAll() {
-    const confirmation = window.prompt('Type DELETE ALL LEADS to permanently delete every lead.');
-    if (confirmation !== 'DELETE ALL LEADS') return;
+    const confirmation = window.prompt('Type DELETE STAGE LEADS to permanently delete every lead in this stage.');
+    if (confirmation !== 'DELETE STAGE LEADS') return;
     await onDeleteAllLeads();
   }
 
@@ -63,7 +63,7 @@ export function LeadDatabase({ leads, onDeleteLead, onDeleteAllLeads }) {
             className="inline-flex items-center gap-2 rounded-lg border border-red-400/25 bg-red-400/10 px-4 py-2.5 text-sm text-red-200 hover:bg-red-400/15 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Trash2 size={16} />
-            Delete All Leads
+            Delete Stage Leads
           </button>
         }
       />

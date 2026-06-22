@@ -17,20 +17,23 @@ async function request(path, options = {}) {
 
 export const api = {
   health: () => request('/health'),
-  analytics: () => request('/analytics'),
+  analytics: (stageId) => request(`/analytics${stageId ? `?stage_id=${stageId}` : ''}`),
+  stages: () => request('/stages'),
+  createStage: (payload) => request('/stages', { method: 'POST', body: JSON.stringify(payload) }),
   objectives: () => request('/objectives'),
   createObjective: (payload) => request('/objectives', { method: 'POST', body: JSON.stringify(payload) }),
   updateObjective: (id, payload) => request(`/objectives/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   deleteObjective: (id) => request(`/objectives/${id}`, { method: 'DELETE' }),
-  leads: () => request('/leads'),
-  importLeads: (file) => {
+  leads: (stageId) => request(`/leads${stageId ? `?stage_id=${stageId}` : ''}`),
+  importLeads: (file, stageId) => {
     const form = new FormData();
     form.append('file', file);
+    if (stageId) form.append('stage_id', stageId);
     return request('/leads/import', { method: 'POST', body: form });
   },
   updateLead: (id, payload) => request(`/leads/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   deleteLead: (id) => request(`/leads/${id}`, { method: 'DELETE' }),
-  deleteAllLeads: () => request('/leads', { method: 'DELETE' }),
+  deleteAllLeads: (stageId) => request(`/leads${stageId ? `?stage_id=${stageId}` : ''}`, { method: 'DELETE' }),
   logCall: (id, payload) => request(`/leads/${id}/call`, { method: 'POST', body: JSON.stringify(payload) }),
   callHistory: (leadId) => request(`/calls/history/${leadId}`)
 };
