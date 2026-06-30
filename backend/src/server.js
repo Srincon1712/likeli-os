@@ -26,11 +26,168 @@ app.use(cors());
 app.use(express.json());
 
 const objectiveFields = ['title', 'description', 'category', 'target_value', 'current_value', 'deadline', 'status'];
-const leadFields = ['business_name', 'phone', 'city', 'niche', 'instagram', 'website', 'notes', 'call_note', 'callback_date', 'status', 'call_count', 'last_call_at', 'next_call_at'];
+const leadFields = [
+  'business_name',
+  'phone',
+  'city',
+  'niche',
+  'instagram',
+  'website',
+  'notes',
+  'call_note',
+  'callback_date',
+  'status',
+  'call_count',
+  'last_call_at',
+  'next_call_at',
+  'company',
+  'sector',
+  'contact_name',
+  'contact_role',
+  'whatsapp',
+  'email',
+  'social_links',
+  'objections',
+  'budget',
+  'probability',
+  'last_contact_at',
+  'next_follow_up_at',
+  'priority',
+  'pipeline_stage',
+  'revenue_value'
+];
+
+const tables = {
+  scripts: {
+    table: 'script_library',
+    fields: ['category', 'title', 'content', 'tags'],
+    defaults: { category: 'script', content: '', tags: '' },
+    order: 'updated_at DESC, id DESC'
+  },
+  deals: {
+    table: 'commercial_deals',
+    fields: ['lead_id', 'title', 'stage', 'value', 'probability', 'forecast_date', 'notes'],
+    defaults: { lead_id: null, stage: 'Lead', value: 0, probability: 0, notes: '' },
+    order: 'updated_at DESC, id DESC'
+  },
+  finance: {
+    table: 'finance_records',
+    fields: ['type', 'category', 'amount', 'record_date', 'notes'],
+    defaults: { type: 'income', category: '', amount: 0, record_date: null, notes: '' },
+    order: 'record_date DESC, id DESC'
+  },
+  productivity: {
+    table: 'productivity_items',
+    fields: ['type', 'title', 'status', 'priority', 'project', 'due_date', 'minutes', 'notes'],
+    defaults: { type: 'task', status: 'open', priority: 'medium', project: '', due_date: null, minutes: 0, notes: '' },
+    order: 'updated_at DESC, id DESC'
+  },
+  knowledge: {
+    table: 'knowledge_items',
+    fields: ['type', 'title', 'content', 'tags'],
+    defaults: { type: 'playbook', content: '', tags: '' },
+    order: 'updated_at DESC, id DESC'
+  },
+  personal: {
+    table: 'personal_metrics',
+    fields: ['metric_date', 'sleep_hours', 'exercise_minutes', 'reading_minutes', 'weight', 'energy', 'productivity', 'nutrition', 'social_minutes', 'notes'],
+    defaults: {
+      metric_date: null,
+      sleep_hours: 0,
+      exercise_minutes: 0,
+      reading_minutes: 0,
+      weight: 0,
+      energy: 0,
+      productivity: 0,
+      nutrition: '',
+      social_minutes: 0,
+      notes: ''
+    },
+    order: 'metric_date DESC, id DESC'
+  }
+};
 
 function mapObjective(row) {
   const progress = row.target_value > 0 ? Math.min(100, Math.round((row.current_value / row.target_value) * 100)) : 0;
   return { ...row, progress };
+}
+
+function pipelineStageFromOutcome(outcome, currentStage = 'Lead') {
+  const map = {
+    new: 'Lead',
+    no_answer: 'Contacto',
+    wrong_number: 'Perdido',
+    not_interested: 'Perdido',
+    dead: 'Perdido',
+    callback: 'Contacto',
+    interested: 'Interesado',
+    meeting: 'Demo',
+    proposal: 'Propuesta',
+    closed: 'Ganado',
+    sale: 'Ganado'
+  };
+  return map[outcome] || currentStage || 'Lead';
+}
+
+function rate(part, total) {
+  return total ? Math.round((part / total) * 100) : 0;
+}
+
+function createLeadNote(leadId, content, source = 'manual', createdAt = nowIso()) {
+  const cleanContent = String(content || '').trim();
+  if (!cleanContent) return null;
+  const result = db.prepare(`
+    INSERT INTO lead_notes (lead_id, content, source, created_at)
+    VALUES (?, ?, ?, ?)
+  `).run(leadId, cleanContent, source, createdAt);
+  return db.prepare('SELECT * FROM lead_notes WHERE id = ?').get(result.lastInsertRowid);
+}
+
+function coercePayload(body, config, current = {}) {
+  const updated_at = nowIso();
+  return config.fields.reduce((payload, field) => {
+    const fallback = Object.prototype.hasOwnProperty.call(current, field)
+      ? current[field]
+      : Object.prototype.hasOwnProperty.call(config.defaults, field)
+        ? config.defaults[field]
+        : '';
+    const value = Object.prototype.hasOwnProperty.call(body, field) ? body[field] : fallback;
+    payload[field] = value === '' && field.endsWith('_date') ? null : value;
+    return payload;
+  }, { updated_at });
+}
+
+function registerCrud(resource, config) {
+  app.get(`/api/${resource}`, (_req, res) => {
+    const rows = db.prepare(`SELECT * FROM ${config.table} ORDER BY ${config.order}`).all();
+    res.json(rows);
+  });
+
+  app.post(`/api/${resource}`, (req, res) => {
+    const payload = coercePayload(req.body, config);
+    if (config.fields.includes('title') && !String(payload.title || '').trim()) {
+      return res.status(400).json({ error: 'Title is required' });
+    }
+    const fields = [...config.fields, 'updated_at'];
+    const columns = fields.join(', ');
+    const values = fields.map((field) => `@${field}`).join(', ');
+    const result = db.prepare(`INSERT INTO ${config.table} (${columns}) VALUES (${values})`).run(payload);
+    res.status(201).json(db.prepare(`SELECT * FROM ${config.table} WHERE id = ?`).get(result.lastInsertRowid));
+  });
+
+  app.patch(`/api/${resource}/:id`, (req, res) => {
+    const current = db.prepare(`SELECT * FROM ${config.table} WHERE id = ?`).get(req.params.id);
+    if (!current) return res.status(404).json({ error: 'Record not found' });
+    const payload = { ...coercePayload(req.body, config, current), id: current.id };
+    const assignments = [...config.fields, 'updated_at'].map((field) => `${field} = @${field}`).join(', ');
+    db.prepare(`UPDATE ${config.table} SET ${assignments} WHERE id = @id`).run(payload);
+    res.json(db.prepare(`SELECT * FROM ${config.table} WHERE id = ?`).get(current.id));
+  });
+
+  app.delete(`/api/${resource}/:id`, (req, res) => {
+    db.prepare(`DELETE FROM ${config.table} WHERE id = ?`).run(req.params.id);
+    res.status(204).end();
+  });
 }
 
 function listLeads(req, res) {
@@ -47,7 +204,7 @@ function listLeads(req, res) {
     params.push(stageId);
   }
   const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
-  const rows = db.prepare(`SELECT * FROM leads ${where} ORDER BY updated_at DESC, id DESC`).all(...params);
+  const rows = db.prepare(`SELECT * FROM leads ${where} ORDER BY next_follow_up_at IS NULL, next_follow_up_at ASC, updated_at DESC, id DESC`).all(...params);
   res.json(rows);
 }
 
@@ -67,6 +224,8 @@ function deleteAllLeads(req, res) {
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, database: dbPath });
 });
+
+Object.entries(tables).forEach(([resource, config]) => registerCrud(resource, config));
 
 app.get('/api/stages', (_req, res) => {
   const rows = db.prepare(`
@@ -144,6 +303,65 @@ app.delete('/api/objectives/:id', (req, res) => {
 app.get('/api/leads', listLeads);
 app.get('/leads', listLeads);
 
+app.get('/api/leads/:id/notes', (req, res) => {
+  const lead = db.prepare('SELECT id FROM leads WHERE id = ?').get(req.params.id);
+  if (!lead) return res.status(404).json({ error: 'Lead not found' });
+  const rows = db.prepare('SELECT * FROM lead_notes WHERE lead_id = ? ORDER BY created_at ASC, id ASC').all(req.params.id);
+  res.json(rows);
+});
+
+app.post('/api/leads/:id/notes', (req, res) => {
+  const lead = db.prepare('SELECT id FROM leads WHERE id = ?').get(req.params.id);
+  if (!lead) return res.status(404).json({ error: 'Lead not found' });
+  const note = createLeadNote(lead.id, req.body.content || req.body.note, req.body.source || 'manual');
+  if (!note) return res.status(400).json({ error: 'Note content is required' });
+  res.status(201).json(note);
+});
+
+app.post('/api/leads', (req, res) => {
+  const body = req.body;
+  const stage = body.stage_id
+    ? db.prepare('SELECT id FROM lead_stages WHERE id = ?').get(body.stage_id)
+    : db.prepare('SELECT id FROM lead_stages ORDER BY id DESC LIMIT 1').get();
+  const payload = {
+    business_name: body.business_name || body.company || 'Unnamed lead',
+    phone: body.phone || '',
+    city: body.city || '',
+    niche: body.niche || body.sector || '',
+    instagram: body.instagram || '',
+    website: body.website || '',
+    notes: body.notes || '',
+    call_note: body.call_note || '',
+    callback_date: body.callback_date || null,
+    status: body.status || 'new',
+    call_count: Number(body.call_count || 0),
+    last_call_at: body.last_call_at || null,
+    next_call_at: body.next_call_at || null,
+    company: body.company || body.business_name || '',
+    sector: body.sector || body.niche || '',
+    contact_name: body.contact_name || '',
+    contact_role: body.contact_role || '',
+    whatsapp: body.whatsapp || body.phone || '',
+    email: body.email || '',
+    social_links: body.social_links || '',
+    objections: body.objections || '',
+    budget: Number(body.budget || 0),
+    probability: Number(body.probability || 0),
+    last_contact_at: body.last_contact_at || null,
+    next_follow_up_at: body.next_follow_up_at || body.next_call_at || null,
+    priority: body.priority || 'medium',
+    pipeline_stage: body.pipeline_stage || 'Lead',
+    revenue_value: Number(body.revenue_value || body.budget || 0),
+    stage_id: stage?.id || null,
+    updated_at: nowIso()
+  };
+  const fields = [...leadFields, 'stage_id', 'updated_at'];
+  const columns = fields.join(', ');
+  const values = fields.map((field) => `@${field}`).join(', ');
+  const result = db.prepare(`INSERT INTO leads (${columns}) VALUES (${values})`).run(payload);
+  res.status(201).json(db.prepare('SELECT * FROM leads WHERE id = ?').get(result.lastInsertRowid));
+});
+
 app.post('/api/leads/import', upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'CSV file is required' });
 
@@ -215,7 +433,10 @@ app.patch('/api/leads/:id', (req, res) => {
     UPDATE leads
     SET business_name = @business_name, phone = @phone, city = @city, niche = @niche,
         instagram = @instagram, website = @website, notes = @notes, call_note = @call_note, callback_date = @callback_date, status = @status, call_count = @call_count,
-        last_call_at = @last_call_at, next_call_at = @next_call_at, updated_at = @updated_at
+        last_call_at = @last_call_at, next_call_at = @next_call_at, company = @company, sector = @sector, contact_name = @contact_name,
+        contact_role = @contact_role, whatsapp = @whatsapp, email = @email, social_links = @social_links, objections = @objections,
+        budget = @budget, probability = @probability, last_contact_at = @last_contact_at, next_follow_up_at = @next_follow_up_at,
+        priority = @priority, pipeline_stage = @pipeline_stage, revenue_value = @revenue_value, updated_at = @updated_at
     WHERE id = @id
   `);
   update.run({
@@ -233,6 +454,21 @@ app.patch('/api/leads/:id', (req, res) => {
     call_count: Number(next.call_count || 0),
     last_call_at: next.last_call_at || null,
     next_call_at: next.next_call_at || null,
+    company: next.company || next.business_name || '',
+    sector: next.sector || next.niche || '',
+    contact_name: next.contact_name || '',
+    contact_role: next.contact_role || '',
+    whatsapp: next.whatsapp || next.phone || '',
+    email: next.email || '',
+    social_links: next.social_links || '',
+    objections: next.objections || '',
+    budget: Number(next.budget || 0),
+    probability: Number(next.probability || 0),
+    last_contact_at: next.last_contact_at || next.last_call_at || null,
+    next_follow_up_at: next.next_follow_up_at || next.next_call_at || null,
+    priority: next.priority || 'medium',
+    pipeline_stage: next.pipeline_stage || 'Lead',
+    revenue_value: Number(next.revenue_value || next.budget || 0),
     updated_at: nowIso()
   });
   res.json(db.prepare('SELECT * FROM leads WHERE id = ?').get(current.id));
@@ -249,17 +485,20 @@ app.post('/api/leads/:id/call', (req, res) => {
 
   const outcome = req.body.outcome || 'no_answer';
   const nextCallAt = req.body.next_call_at || null;
-  const note = req.body.note || '';
-  const callbackDate = req.body.callback_date || req.body.callback_date || null;
+  const note = String(req.body.note || '').trim();
+  const callbackDate = req.body.callback_date || nextCallAt || null;
+  const durationSeconds = Number(req.body.duration_seconds || 0);
   const callTime = nowIso();
 
   const saveCall = db.transaction(() => {
-    db.prepare('INSERT INTO call_events (lead_id, outcome, note, created_at) VALUES (?, ?, ?, ?)').run(lead.id, outcome, note, callTime);
+    db.prepare('INSERT INTO call_events (lead_id, outcome, note, duration_seconds, created_at) VALUES (?, ?, ?, ?, ?)').run(lead.id, outcome, note, durationSeconds, callTime);
+    createLeadNote(lead.id, note, 'call', callTime);
     db.prepare(`
       UPDATE leads
-      SET status = ?, call_count = call_count + 1, last_call_at = ?, next_call_at = ?, callback_date = ?, call_note = ?, updated_at = ?
+      SET status = ?, call_count = call_count + 1, last_call_at = ?, next_call_at = ?, callback_date = ?, call_note = ?,
+          last_contact_at = ?, next_follow_up_at = ?, pipeline_stage = ?, updated_at = ?
       WHERE id = ?
-    `).run(outcome, callTime, nextCallAt, callbackDate, note, callTime, lead.id);
+    `).run(outcome, callTime, nextCallAt, callbackDate, note, callTime, nextCallAt, pipelineStageFromOutcome(outcome, lead.pipeline_stage), callTime, lead.id);
     return db.prepare('SELECT * FROM leads WHERE id = ?').get(lead.id);
   });
 
@@ -286,9 +525,23 @@ app.get('/api/analytics', (req, res) => {
   const leadCounts = db.prepare(`SELECT status, COUNT(*) as count FROM leads ${leadWhere} GROUP BY status`).all(...leadParams);
   const statusCounts = Object.fromEntries(leadCounts.map((row) => [row.status, row.count]));
   const callsTotal = db.prepare(`SELECT COUNT(*) as count FROM call_events ${callJoinWhere}`).get(...leadParams).count;
-  const responded = (statusCounts.interested || 0) + (statusCounts.callback || 0) + (statusCounts.closed || 0);
-  const conversion = callsTotal ? Math.round(((statusCounts.closed || 0) / callsTotal) * 100) : 0;
-  const responseRate = callsTotal ? Math.round((responded / callsTotal) * 100) : 0;
+  const callOutcomes = db.prepare(`
+    SELECT call_events.outcome, COUNT(*) as count
+    FROM call_events
+    ${callJoinWhere}
+    GROUP BY call_events.outcome
+  `).all(...leadParams);
+  const outcomeCounts = Object.fromEntries(callOutcomes.map((row) => [row.outcome, row.count]));
+  const leadsTotal = db.prepare(`SELECT COUNT(*) as count FROM leads ${leadWhere}`).get(...leadParams).count;
+  const contacted = callsTotal;
+  const conversations = (outcomeCounts.interested || 0) + (outcomeCounts.callback || 0) + (outcomeCounts.meeting || 0) + (outcomeCounts.proposal || 0) + (outcomeCounts.closed || 0) + (outcomeCounts.sale || 0);
+  const interested = (statusCounts.interested || 0) + (statusCounts.callback || 0) + (statusCounts.meeting || 0) + (statusCounts.proposal || 0);
+  const meetings = (statusCounts.meeting || 0) + (statusCounts.proposal || 0) + (statusCounts.closed || 0) + (statusCounts.sale || 0);
+  const proposals = (statusCounts.proposal || 0) + (statusCounts.closed || 0) + (statusCounts.sale || 0);
+  const won = (statusCounts.closed || 0) + (statusCounts.sale || 0);
+  const responded = (statusCounts.interested || 0) + (statusCounts.callback || 0) + won;
+  const conversion = rate(won, callsTotal);
+  const responseRate = rate(responded, callsTotal);
   const callsByDay = db.prepare(`
     SELECT * FROM (
       SELECT substr(call_events.created_at, 1, 10) as day, COUNT(*) as calls
@@ -306,6 +559,35 @@ app.get('/api/analytics', (req, res) => {
     WHERE (status = 'completed' OR current_value >= target_value)
     AND substr(updated_at, 1, 7) = substr(CURRENT_TIMESTAMP, 1, 7)
   `).get().count;
+
+  const pipeline = db.prepare(`
+    SELECT pipeline_stage AS stage, COUNT(*) AS count, SUM(COALESCE(revenue_value, budget, 0)) AS value
+    FROM leads
+    ${leadWhere}
+    GROUP BY pipeline_stage
+  `).all(...leadParams);
+  const avgDuration = db.prepare(`SELECT AVG(duration_seconds) AS value FROM call_events ${callJoinWhere}`).get(...leadParams).value || 0;
+  const monthRevenue = db.prepare(`
+    SELECT COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) AS income,
+           COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) AS expenses
+    FROM finance_records
+    WHERE substr(record_date, 1, 7) = substr(CURRENT_TIMESTAMP, 1, 7)
+  `).get();
+  const cash = db.prepare(`
+    SELECT COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE -amount END), 0) AS amount
+    FROM finance_records
+  `).get().amount;
+  const openTasks = db.prepare("SELECT COUNT(*) AS count FROM productivity_items WHERE status != 'done'").get().count;
+  const deepWorkMinutes = db.prepare(`
+    SELECT COALESCE(SUM(minutes), 0) AS minutes
+    FROM productivity_items
+    WHERE type = 'deep_work' AND substr(updated_at, 1, 7) = substr(CURRENT_TIMESTAMP, 1, 7)
+  `).get().minutes;
+  const personalAverage = db.prepare(`
+    SELECT AVG(energy) AS energy, AVG(productivity) AS productivity, AVG(sleep_hours) AS sleep
+    FROM personal_metrics
+    WHERE metric_date >= date('now', '-14 days')
+  `).get();
 
   res.json({
     objectives: {
@@ -326,6 +608,53 @@ app.get('/api/analytics', (req, res) => {
       noAnswer: statusCounts.no_answer || 0,
       newLeads: statusCounts.new || 0,
       byDay: callsByDay
+    },
+    sales: {
+      funnel: [
+        { stage: 'Leads', count: leadsTotal },
+        { stage: 'Contactados', count: contacted },
+        { stage: 'Conversaciones', count: conversations },
+        { stage: 'Interesados', count: interested },
+        { stage: 'Reuniones', count: meetings },
+        { stage: 'Propuestas', count: proposals },
+        { stage: 'Ventas', count: won }
+      ],
+      rates: {
+        contactRate: rate(contacted, leadsTotal),
+        interestedRate: rate(interested, contacted),
+        meetingRate: rate(meetings, interested),
+        proposalRate: rate(proposals, meetings),
+        closeRate: rate(won, proposals || contacted)
+      },
+      revenue: monthRevenue.income,
+      callsPerHour: 0,
+      averageDurationSeconds: Math.round(avgDuration),
+      salesThisWeek: db.prepare(`
+        SELECT COUNT(*) AS count
+        FROM call_events
+        WHERE outcome IN ('closed', 'sale') AND created_at >= date('now', '-7 days')
+      `).get().count
+    },
+    pipeline,
+    finance: {
+      income: monthRevenue.income,
+      expenses: monthRevenue.expenses,
+      cash,
+      cashFlow: monthRevenue.income - monthRevenue.expenses,
+      mrr: monthRevenue.income,
+      arr: monthRevenue.income * 12,
+      burnRate: monthRevenue.expenses,
+      runway: monthRevenue.expenses ? Math.round((cash / monthRevenue.expenses) * 10) / 10 : null
+    },
+    productivity: {
+      openTasks,
+      deepWorkMinutes,
+      activeObjectives: objectiveRows.filter((item) => item.status === 'active').length
+    },
+    personal: {
+      averageEnergy: Math.round(personalAverage.energy || 0),
+      averageProductivity: Math.round(personalAverage.productivity || 0),
+      averageSleep: Math.round((personalAverage.sleep || 0) * 10) / 10
     }
   });
 });

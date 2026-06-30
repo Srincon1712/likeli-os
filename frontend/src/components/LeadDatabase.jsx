@@ -60,7 +60,7 @@ export function LeadDatabase({ leads, onDeleteLead, onDeleteAllLeads }) {
           <button
             onClick={deleteAll}
             disabled={!leads.length}
-            className="inline-flex items-center gap-2 rounded-lg border border-red-400/25 bg-red-400/10 px-4 py-2.5 text-sm text-red-200 hover:bg-red-400/15 disabled:cursor-not-allowed disabled:opacity-40"
+            className="ui-button border border-red-400/25 bg-red-400/10 text-red-200 hover:bg-red-400/15 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Trash2 size={16} />
             Delete Stage Leads
@@ -76,8 +76,8 @@ export function LeadDatabase({ leads, onDeleteLead, onDeleteAllLeads }) {
         <StatCard label="Muertos" value={metrics.dead} detail="removed from motion" />
       </div>
 
-      <div className="glass mt-5 rounded-lg p-4">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+      <div className="glass mt-4 rounded-lg p-3">
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
           <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={17} />
             <input
@@ -88,12 +88,12 @@ export function LeadDatabase({ leads, onDeleteLead, onDeleteAllLeads }) {
             />
           </div>
 
-          <div className="flex gap-2 overflow-x-auto pb-1 xl:pb-0">
+          <div className="flex flex-wrap gap-1.5">
             {filters.map((item) => (
               <button
                 key={item.id}
                 onClick={() => setFilter(item.id)}
-                className={`min-w-fit rounded-lg border px-3 py-2 text-sm ${
+                className={`rounded-md border px-2.5 py-1.5 text-xs ${
                   filter === item.id
                     ? 'border-signal/30 bg-signal/10 text-ice'
                     : 'border-white/10 bg-white/[0.03] text-slate-400 hover:border-white/20 hover:text-white'
@@ -105,22 +105,22 @@ export function LeadDatabase({ leads, onDeleteLead, onDeleteAllLeads }) {
           </div>
         </div>
 
-        <div className="mt-4 overflow-hidden rounded-lg border border-white/10">
-          <div className="max-h-[68vh] overflow-auto">
-            <table className="min-w-[1180px] w-full border-collapse text-left text-sm">
+        <div className="mt-3 overflow-hidden rounded-lg border border-white/10">
+          <div className="max-h-[68vh] overflow-y-auto overflow-x-hidden">
+            <table className="data-table">
               <thead className="sticky top-0 z-10 bg-carbon/95 backdrop-blur">
-                <tr className="border-b border-white/10 text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                <tr className="border-b border-white/10">
                   <Th>Business</Th>
                   <Th>Phone</Th>
-                  <Th>City</Th>
-                  <Th>Niche</Th>
-                  <Th>Instagram</Th>
-                  <Th>Website</Th>
+                  <Th className="hidden md:table-cell">City</Th>
+                  <Th className="hidden lg:table-cell">Niche</Th>
+                  <Th className="hidden 2xl:table-cell">Instagram</Th>
+                  <Th className="hidden xl:table-cell">Website</Th>
                   <Th>Status</Th>
-                  <Th>Calls</Th>
-                  <Th>Last call</Th>
-                  <Th>Next follow-up</Th>
-                  <Th>Created</Th>
+                  <Th className="hidden sm:table-cell">Calls</Th>
+                  <Th className="hidden xl:table-cell">Last call</Th>
+                  <Th className="hidden lg:table-cell">Next</Th>
+                  <Th className="hidden 2xl:table-cell">Created</Th>
                   <Th></Th>
                 </tr>
               </thead>
@@ -129,10 +129,10 @@ export function LeadDatabase({ leads, onDeleteLead, onDeleteAllLeads }) {
                   <tr key={lead.id} className="border-b border-white/[0.06] text-slate-300 transition-colors hover:bg-signal/[0.04]">
                     <Td strong>{lead.business_name}</Td>
                     <Td mono>{lead.phone || '-'}</Td>
-                    <Td>{lead.city || '-'}</Td>
-                    <Td>{lead.niche || '-'}</Td>
-                    <Td>{lead.instagram || '-'}</Td>
-                    <Td>
+                    <Td className="hidden md:table-cell">{lead.city || '-'}</Td>
+                    <Td className="hidden lg:table-cell">{lead.niche || '-'}</Td>
+                    <Td className="hidden 2xl:table-cell">{lead.instagram || '-'}</Td>
+                    <Td className="hidden xl:table-cell">
                       {lead.website ? (
                         <a href={normalizeUrl(lead.website)} target="_blank" rel="noreferrer" className="text-ice hover:text-white">
                           {lead.website}
@@ -144,14 +144,14 @@ export function LeadDatabase({ leads, onDeleteLead, onDeleteAllLeads }) {
                     <Td>
                       <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-xs text-slate-300">{formatStatus(lead.status)}</span>
                     </Td>
-                    <Td mono>{lead.call_count || 0}</Td>
-                    <Td>{formatDate(lead.last_call_at)}</Td>
-                    <Td>{formatDate(lead.next_call_at)}</Td>
-                    <Td>{formatDate(lead.created_at)}</Td>
+                    <Td className="hidden sm:table-cell" mono>{lead.call_count || 0}</Td>
+                    <Td className="hidden xl:table-cell">{formatDate(lead.last_call_at)}</Td>
+                    <Td className="hidden lg:table-cell">{formatDate(lead.next_call_at)}</Td>
+                    <Td className="hidden 2xl:table-cell">{formatDate(lead.created_at)}</Td>
                     <Td>
                       <button
                         onClick={() => deleteLead(lead)}
-                        className="rounded-md border border-white/10 p-2 text-slate-500 hover:border-red-400/30 hover:text-red-300"
+                        className="ui-icon-button border border-white/10 text-slate-500 hover:border-red-400/30 hover:text-red-300"
                         title="Delete lead"
                       >
                         <Trash2 size={15} />
@@ -174,14 +174,14 @@ export function LeadDatabase({ leads, onDeleteLead, onDeleteAllLeads }) {
   );
 }
 
-function Th({ children }) {
-  return <th className="whitespace-nowrap px-4 py-3 font-medium">{children}</th>;
+function Th({ children, className = '' }) {
+  return <th className={className}>{children}</th>;
 }
 
-function Td({ children, strong, mono }) {
+function Td({ children, strong, mono, className = '' }) {
   return (
-    <td className={`max-w-[220px] whitespace-nowrap px-4 py-3 ${strong ? 'font-medium text-white' : ''} ${mono ? 'metric text-slate-200' : ''}`}>
-      <div className="overflow-hidden text-ellipsis">{children}</div>
+    <td className={`${className} ${strong ? 'font-medium text-white' : ''} ${mono ? 'metric text-slate-200' : ''}`}>
+      <div className="truncate-cell">{children}</div>
     </td>
   );
 }

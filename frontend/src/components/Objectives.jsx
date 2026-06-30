@@ -37,15 +37,15 @@ export function Objectives({ objectives, analytics, onCreate, onUpdate, onDelete
         <StatCard label="Active" value={analytics?.active || 0} detail="currently running" />
       </div>
 
-      <div className="mt-5 grid gap-5 xl:grid-cols-[380px_1fr]">
-        <form onSubmit={submit} className="glass rounded-lg p-5">
-          <div className="mb-4 flex items-center gap-2">
+      <div className="mt-4 grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)]">
+        <form onSubmit={submit} className="glass rounded-lg p-4">
+          <div className="mb-3 flex items-center gap-2">
             <Plus size={18} className="text-signal" />
             <h3 className="font-medium">New objective</h3>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             <input className="field" placeholder="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-            <textarea className="field min-h-24 resize-none" placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+            <textarea className="field min-h-20 resize-none" placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
             <div className="grid grid-cols-2 gap-3">
               <input className="field" placeholder="Category" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
               <select className="field" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
@@ -59,17 +59,17 @@ export function Objectives({ objectives, analytics, onCreate, onUpdate, onDelete
               <input className="field" type="number" placeholder="Current" value={form.current_value} onChange={(e) => setForm({ ...form, current_value: e.target.value })} />
             </div>
             <input className="field" type="date" value={form.deadline} onChange={(e) => setForm({ ...form, deadline: e.target.value })} />
-            <button className="w-full rounded-lg border border-signal/30 bg-signal/[0.12] px-4 py-3 text-sm font-medium text-ice hover:bg-signal/[0.18]">
+            <button className="ui-button w-full border border-signal/30 bg-signal/[0.12] font-medium text-ice hover:bg-signal/[0.18]">
               Create objective
             </button>
           </div>
         </form>
 
-        <div className="space-y-3">
+        <div className="min-w-0 space-y-3">
           {objectives.map((objective) => (
             <ObjectiveCard key={objective.id} objective={objective} onUpdate={onUpdate} onDelete={onDelete} />
           ))}
-          {!objectives.length ? <div className="glass rounded-lg p-8 text-center text-sm text-slate-400">No objectives yet.</div> : null}
+          {!objectives.length ? <div className="glass rounded-lg p-6 text-center text-sm text-slate-400">No objectives yet.</div> : null}
         </div>
       </div>
     </section>
@@ -80,21 +80,21 @@ function ObjectiveCard({ objective, onUpdate, onDelete }) {
   const progress = Math.min(100, objective.progress || 0);
 
   return (
-    <article className="glass rounded-lg p-5">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <article className="glass rounded-lg p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-lg font-medium text-white">{objective.title}</h3>
-            <span className="rounded-md border border-white/10 px-2 py-1 text-[11px] uppercase text-slate-400">{objective.category}</span>
+            <h3 className="text-base font-medium text-white">{objective.title}</h3>
+            <span className="rounded-md border border-white/10 px-2 py-0.5 text-[10px] uppercase text-slate-400">{objective.category}</span>
           </div>
-          <p className="mt-2 text-sm leading-6 text-slate-400">{objective.description || 'No description'}</p>
+          <p className="mt-1.5 text-[13px] leading-5 text-slate-400">{objective.description || 'No description'}</p>
         </div>
-        <button onClick={() => onDelete(objective.id)} className="rounded-md border border-white/10 p-2 text-slate-500 hover:border-red-400/30 hover:text-red-300">
+        <button onClick={() => onDelete(objective.id)} className="ui-icon-button border border-white/10 text-slate-500 hover:border-red-400/30 hover:text-red-300">
           <Trash2 size={16} />
         </button>
       </div>
 
-      <div className="mt-5">
+      <div className="mt-4">
         <div className="mb-2 flex items-center justify-between text-xs text-slate-400">
           <span className="metric">{objective.current_value} / {objective.target_value}</span>
           <span className="metric text-ice">{progress}%</span>
@@ -104,7 +104,7 @@ function ObjectiveCard({ objective, onUpdate, onDelete }) {
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_120px]">
+      <div className="mt-3 grid gap-2.5 sm:grid-cols-[1fr_1fr_120px]">
         <input
           className="field"
           type="number"

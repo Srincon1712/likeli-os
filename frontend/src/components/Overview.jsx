@@ -21,13 +21,13 @@ export function Overview({ analytics }) {
         <StatCard label="New leads" value={calls.newLeads || 0} detail="untouched queue" />
       </div>
 
-      <div className="mt-5 grid gap-5 xl:grid-cols-[1fr_360px]">
-        <div className="glass rounded-lg p-5">
-          <div className="mb-5 flex items-center justify-between">
+      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="glass min-w-0 rounded-lg p-4">
+          <div className="mb-4 flex items-center justify-between">
             <h3 className="font-medium text-white">Calls per day</h3>
             <span className="text-xs font-mono uppercase text-slate-500">30 day window</span>
           </div>
-          <div className="h-80">
+          <div className="h-60">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={byDay} margin={{ top: 10, right: 12, left: -20, bottom: 0 }}>
                 <defs>
@@ -46,9 +46,9 @@ export function Overview({ analytics }) {
           </div>
         </div>
 
-        <div className="glass rounded-lg p-5">
+        <div className="glass rounded-lg p-4">
           <h3 className="font-medium text-white">Calling analytics</h3>
-          <div className="mt-5 space-y-4">
+          <div className="mt-4 space-y-3">
             <Bar label="Interested" value={calls.interested || 0} total={calls.total || 1} />
             <Bar label="Callbacks" value={calls.callbacks || 0} total={calls.total || 1} />
             <Bar label="Closed" value={calls.closed || 0} total={calls.total || 1} />
