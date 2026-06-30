@@ -33,6 +33,12 @@ function cleanCell(value) {
   return String(value ?? '').trim().replace(/\s+/g, ' ');
 }
 
+export function normalizePhoneNumber(value) {
+  const digits = String(value ?? '').replace(/\D/g, '');
+  if (digits.length < 7) return '';
+  return digits;
+}
+
 export function analyzeCsvColumns(headers) {
   const detected = {};
   const ignored = [];
@@ -84,8 +90,8 @@ export function sanitizeCsvRecord(record, detectedColumns) {
     return { valid: false, reason: 'empty_row' };
   }
 
-  if (!mapped.business_name && !mapped.phone) {
-    return { valid: false, reason: 'missing_name_and_phone' };
+  if (!normalizePhoneNumber(mapped.phone)) {
+    return { valid: false, reason: 'missing_phone' };
   }
 
   const metadata = [
@@ -112,11 +118,13 @@ export function sanitizeCsvRecord(record, detectedColumns) {
   };
 }
 
-export function summarizeCsvImport({ filename, detectedColumns, ignoredColumns, imported, invalidRows }) {
+export function summarizeCsvImport({ filename, detectedColumns, ignoredColumns, imported, invalidRows, duplicateRows = 0, missingPhoneRows = 0 }) {
   const detectedEntries = Object.entries(detectedColumns).map(([source, target]) => `${source} -> ${target}`);
   console.log(`[Likeli CSV] File: ${filename}`);
   console.log(`[Likeli CSV] Imported leads: ${imported}`);
   console.log(`[Likeli CSV] Detected columns: ${detectedEntries.length ? detectedEntries.join(', ') : 'none'}`);
   console.log(`[Likeli CSV] Ignored columns: ${ignoredColumns.length ? ignoredColumns.join(', ') : 'none'}`);
   console.log(`[Likeli CSV] Invalid rows: ${invalidRows}`);
+  console.log(`[Likeli CSV] Missing phone rows: ${missingPhoneRows}`);
+  console.log(`[Likeli CSV] Duplicate phone rows: ${duplicateRows}`);
 }

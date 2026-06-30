@@ -6,7 +6,7 @@ import path from 'path';
 import { parse } from 'csv-parse/sync';
 import { fileURLToPath } from 'url';
 import { db, dbPath, migrate, nowIso } from './db/database.js';
-import { analyzeCsvColumns, sanitizeCsvRecord, summarizeCsvImport } from './csvImport.js';
+import { analyzeCsvColumns, normalizePhoneNumber, sanitizeCsvRecord, summarizeCsvImport } from './csvImport.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -388,23 +388,46 @@ app.post('/api/leads/import', upload.single('file'), (req, res) => {
     INSERT INTO leads (business_name, phone, city, niche, instagram, website, notes, stage_id, updated_at)
     VALUES (@business_name, @phone, @city, @niche, @instagram, @website, @notes, @stage_id, @updated_at)
   `);
+  const existingPhones = new Set(
+    db.prepare("SELECT phone FROM leads WHERE TRIM(COALESCE(phone, '')) != ''")
+      .all()
+      .map((row) => normalizePhoneNumber(row.phone))
+      .filter(Boolean)
+  );
 
   const result = db.transaction((rows) => {
     let imported = 0;
     let invalidRows = 0;
+    let duplicateRows = 0;
+    let missingPhoneRows = 0;
+    const csvPhones = new Set();
 
     for (const row of rows) {
       const parsed = sanitizeCsvRecord(row, detected);
       if (!parsed.valid) {
         invalidRows += 1;
+        if (parsed.reason === 'missing_phone') missingPhoneRows += 1;
+        continue;
+      }
+
+      const phoneKey = normalizePhoneNumber(parsed.lead.phone);
+      if (!phoneKey) {
+        invalidRows += 1;
+        missingPhoneRows += 1;
+        continue;
+      }
+      if (existingPhones.has(phoneKey) || csvPhones.has(phoneKey)) {
+        duplicateRows += 1;
         continue;
       }
 
       insert.run({ ...parsed.lead, stage_id: stage.id, updated_at: nowIso() });
+      csvPhones.add(phoneKey);
+      existingPhones.add(phoneKey);
       imported += 1;
     }
 
-    return { imported, invalidRows };
+    return { imported, invalidRows, duplicateRows, missingPhoneRows };
   })(records);
 
   summarizeCsvImport({
@@ -412,12 +435,16 @@ app.post('/api/leads/import', upload.single('file'), (req, res) => {
     detectedColumns: detected,
     ignoredColumns: ignored,
     imported: result.imported,
-    invalidRows: result.invalidRows
+    invalidRows: result.invalidRows,
+    duplicateRows: result.duplicateRows,
+    missingPhoneRows: result.missingPhoneRows
   });
 
   res.status(201).json({
     imported: result.imported,
     invalidRows: result.invalidRows,
+    duplicateRows: result.duplicateRows,
+    missingPhoneRows: result.missingPhoneRows,
     detectedColumns: detected,
     ignoredColumns: ignored,
     filename: req.file.originalname
