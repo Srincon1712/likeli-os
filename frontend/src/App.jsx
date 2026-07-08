@@ -10,9 +10,29 @@ import { PersonalAnalytics } from './components/PersonalAnalytics.jsx';
 import { Productivity } from './components/Productivity.jsx';
 import { SalesAnalytics } from './components/SalesAnalytics.jsx';
 import { Shell } from './components/Shell.jsx';
+import { DailyCompliancePopup } from './components/life/DailyCompliancePopup.jsx';
+import { LifeAnalyticsPage } from './components/life/LifeAnalyticsPage.jsx';
+import { LifeDailyCompliance } from './components/life/LifeDailyCompliance.jsx';
+import { LifeDashboard } from './components/life/LifeDashboard.jsx';
 import { api } from './lib/api.js';
+import {
+  clearDailyComplianceRecord,
+  createDailyComplianceRecord,
+  deleteDailyComplianceRecord,
+  formatDisplayDate,
+  getDailyCompliancePrompt,
+  getLocalDateKey,
+  loadDailyComplianceRecords,
+  saveDailyComplianceRecord
+} from './lib/lifeDailyCompliance.js';
 
 export default function App() {
+  const [currentOS, setCurrentOS] = useState(() => (window.location.pathname.startsWith('/life-os') ? 'life' : 'likeli'));
+  const [lifeActiveView, setLifeActiveView] = useState(() => getLifeViewFromPath(window.location.pathname));
+  const [editingDailyRecord, setEditingDailyRecord] = useState(null);
+  const [selectedLifeDate, setSelectedLifeDate] = useState(() => getLocalDateKey());
+  const [dailyComplianceRecords, setDailyComplianceRecords] = useState(() => loadDailyComplianceRecords());
+  const [dailyCompliancePrompt, setDailyCompliancePrompt] = useState(() => getDailyCompliancePrompt());
   const [activeView, setActiveView] = useState('dashboard');
   const [objectives, setObjectives] = useState([]);
   const [leads, setLeads] = useState([]);
@@ -74,8 +94,84 @@ export default function App() {
   }
 
   useEffect(() => {
-    load();
+    if (currentOS === 'likeli') {
+      load();
+    }
+  }, [currentOS]);
+
+  useEffect(() => {
+    function syncOSFromLocation() {
+      setCurrentOS(window.location.pathname.startsWith('/life-os') ? 'life' : 'likeli');
+      setLifeActiveView(getLifeViewFromPath(window.location.pathname));
+    }
+
+    window.addEventListener('popstate', syncOSFromLocation);
+    return () => window.removeEventListener('popstate', syncOSFromLocation);
   }, []);
+
+  function toggleOS() {
+    const nextOS = currentOS === 'likeli' ? 'life' : 'likeli';
+    const nextPath = nextOS === 'life' ? '/life-os' : '/';
+    window.history.pushState({}, '', nextPath);
+    setCurrentOS(nextOS);
+    if (nextOS === 'life') {
+      setLifeActiveView('dashboard');
+    }
+  }
+
+  function changeLifeView(viewId) {
+    setLifeActiveView(viewId);
+    window.history.pushState({}, '', viewId === 'dashboard' ? '/life-os' : `/life-os/${viewId}`);
+  }
+
+  function openDailyRecordForm(date) {
+    setSelectedLifeDate(date);
+    const record = dailyComplianceRecords.find((item) => item.date === date);
+    setEditingDailyRecord(record || { date, values: {}, promptedOn: null });
+  }
+
+  function saveDailyCompliance(values) {
+    const record = createDailyComplianceRecord({
+      date: dailyCompliancePrompt.targetDateKey,
+      values,
+      promptedOn: dailyCompliancePrompt.promptDateKey
+    });
+    const nextRecords = saveDailyComplianceRecord(record);
+    setDailyComplianceRecords(nextRecords);
+    setDailyCompliancePrompt(getDailyCompliancePrompt(nextRecords));
+  }
+
+  function saveEditedDailyCompliance(values) {
+    if (!editingDailyRecord) return;
+
+    const record = createDailyComplianceRecord({
+      date: editingDailyRecord.date,
+      values,
+      promptedOn: editingDailyRecord.promptedOn
+    });
+    const nextRecords = saveDailyComplianceRecord(record);
+    setDailyComplianceRecords(nextRecords);
+    setDailyCompliancePrompt(getDailyCompliancePrompt(nextRecords));
+    setEditingDailyRecord(null);
+  }
+
+  function deleteDailyRecord(date) {
+    const confirmed = window.confirm(`Eliminar el registro del ${formatDisplayDate(date)}?`);
+    if (!confirmed) return;
+
+    const nextRecords = deleteDailyComplianceRecord(date);
+    setDailyComplianceRecords(nextRecords);
+    setDailyCompliancePrompt(getDailyCompliancePrompt(nextRecords));
+  }
+
+  function clearDailyRecord(date) {
+    const confirmed = window.confirm(`Vaciar el registro del ${formatDisplayDate(date)}? Se eliminaran todos los datos registrados para esa fecha.`);
+    if (!confirmed) return;
+
+    const nextRecords = clearDailyComplianceRecord(date);
+    setDailyComplianceRecords(nextRecords);
+    setDailyCompliancePrompt(getDailyCompliancePrompt(nextRecords));
+  }
 
   const objectiveActions = {
     onCreate: async (payload) => {
@@ -138,56 +234,125 @@ export default function App() {
   }
 
   return (
-    <Shell activeView={activeView} onViewChange={setActiveView} health={health}>
-      {error ? (
-        <div className="mb-4 rounded-lg border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm text-red-200">
-          Backend offline: {error}. Start the Node server on port 4040.
-        </div>
+    <>
+      <Shell
+        activeView={activeView}
+        onViewChange={setActiveView}
+        health={health}
+        currentOS={currentOS}
+        onToggleOS={toggleOS}
+        lifeActiveView={lifeActiveView}
+        onLifeViewChange={changeLifeView}
+      >
+        {currentOS === 'life' ? (
+          <LifeOSView
+            activeView={lifeActiveView}
+            records={dailyComplianceRecords}
+            selectedDate={selectedLifeDate}
+            onSelectDate={setSelectedLifeDate}
+            onOpenDailyRecord={openDailyRecordForm}
+            onDeleteDailyRecord={deleteDailyRecord}
+            onClearDailyRecord={clearDailyRecord}
+          />
+        ) : (
+          <>
+            {error ? (
+              <div className="mb-4 rounded-lg border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm text-red-200">
+                Backend offline: {error}. Start the Node server on port 4040.
+              </div>
+            ) : null}
+
+            {activeView === 'dashboard' ? <Dashboard analytics={analytics} leads={leads} productivityItems={productivityItems} /> : null}
+            {activeView === 'ceo' ? <CEODashboard analytics={analytics} /> : null}
+            {activeView === 'crm' ? <CRM leads={leads} onCreateLead={createLead} onUpdateLead={updateLead} /> : null}
+            {activeView === 'sales-analytics' ? <SalesAnalytics analytics={analytics} /> : null}
+            {activeView === 'pipeline' ? <CommercialPipeline leads={leads} deals={deals} analytics={analytics} onUpdateLead={updateLead} /> : null}
+            {activeView === 'finance' ? <Finance records={financeRecords} analytics={analytics} onCreate={async (payload) => { await api.createFinance(payload); await load(selectedStageId); }} /> : null}
+            {activeView === 'productivity' ? (
+              <Productivity
+                items={productivityItems}
+                analytics={analytics}
+                objectives={objectives}
+                objectiveAnalytics={analytics?.objectives}
+                onCreate={async (payload) => { await api.createProductivity(payload); await load(selectedStageId); }}
+                onUpdate={async (id, payload) => { await api.updateProductivity(id, payload); await load(selectedStageId); }}
+                objectiveActions={objectiveActions}
+              />
+            ) : null}
+            {activeView === 'knowledge' ? (
+              <KnowledgeBase
+                items={knowledgeItems}
+                scripts={scripts}
+                onCreateKnowledge={async (payload) => { await api.createKnowledge(payload); await load(selectedStageId); }}
+                onCreateScript={async (payload) => { await api.createScript(payload); await load(selectedStageId); }}
+              />
+            ) : null}
+            {activeView === 'personal' ? <PersonalAnalytics records={personalMetrics} analytics={analytics} onCreate={async (payload) => { await api.createPersonal(payload); await load(selectedStageId); }} /> : null}
+            {activeView === 'objectives' ? (
+              <Objectives objectives={objectives} analytics={analytics?.objectives} onCreate={objectiveActions.onCreate} onUpdate={objectiveActions.onUpdate} onDelete={objectiveActions.onDelete} />
+            ) : null}
+            {activeView === 'calls' ? (
+              <>
+                <StageBar stages={stages} selectedStageId={selectedStageId} onSelect={selectStage} onCreate={createStage} />
+                <ColdCalling key={selectedStageId} leads={leads} analytics={analytics?.calls} scripts={scripts} onImport={importLeads} onLogCall={logCall} onUpdateLead={updateLead} />
+              </>
+            ) : null}
+            {activeView === 'lead-database' ? (
+              <>
+                <StageBar stages={stages} selectedStageId={selectedStageId} onSelect={selectStage} onCreate={createStage} />
+                <LeadDatabase leads={leads} onDeleteLead={deleteLead} onDeleteAllLeads={deleteAllLeads} />
+              </>
+            ) : null}
+          </>
+        )}
+      </Shell>
+
+      {dailyCompliancePrompt.shouldShow ? (
+        <DailyCompliancePopup
+          targetDisplayDate={dailyCompliancePrompt.targetDisplayDate}
+          onSave={saveDailyCompliance}
+          onCancel={() => setDailyCompliancePrompt((currentPrompt) => ({ ...currentPrompt, shouldShow: false }))}
+        />
       ) : null}
 
-      {activeView === 'dashboard' ? <Dashboard analytics={analytics} leads={leads} productivityItems={productivityItems} /> : null}
-      {activeView === 'ceo' ? <CEODashboard analytics={analytics} /> : null}
-      {activeView === 'crm' ? <CRM leads={leads} onCreateLead={createLead} onUpdateLead={updateLead} /> : null}
-      {activeView === 'sales-analytics' ? <SalesAnalytics analytics={analytics} /> : null}
-      {activeView === 'pipeline' ? <CommercialPipeline leads={leads} deals={deals} analytics={analytics} onUpdateLead={updateLead} /> : null}
-      {activeView === 'finance' ? <Finance records={financeRecords} analytics={analytics} onCreate={async (payload) => { await api.createFinance(payload); await load(selectedStageId); }} /> : null}
-      {activeView === 'productivity' ? (
-        <Productivity
-          items={productivityItems}
-          analytics={analytics}
-          objectives={objectives}
-          objectiveAnalytics={analytics?.objectives}
-          onCreate={async (payload) => { await api.createProductivity(payload); await load(selectedStageId); }}
-          onUpdate={async (id, payload) => { await api.updateProductivity(id, payload); await load(selectedStageId); }}
-          objectiveActions={objectiveActions}
+      {editingDailyRecord ? (
+        <DailyCompliancePopup
+          mode="edit"
+          targetDisplayDate={formatDisplayDate(editingDailyRecord.date)}
+          initialValues={editingDailyRecord.values}
+          onSave={saveEditedDailyCompliance}
+          onCancel={() => setEditingDailyRecord(null)}
         />
       ) : null}
-      {activeView === 'knowledge' ? (
-        <KnowledgeBase
-          items={knowledgeItems}
-          scripts={scripts}
-          onCreateKnowledge={async (payload) => { await api.createKnowledge(payload); await load(selectedStageId); }}
-          onCreateScript={async (payload) => { await api.createScript(payload); await load(selectedStageId); }}
-        />
-      ) : null}
-      {activeView === 'personal' ? <PersonalAnalytics records={personalMetrics} analytics={analytics} onCreate={async (payload) => { await api.createPersonal(payload); await load(selectedStageId); }} /> : null}
-      {activeView === 'objectives' ? (
-        <Objectives objectives={objectives} analytics={analytics?.objectives} onCreate={objectiveActions.onCreate} onUpdate={objectiveActions.onUpdate} onDelete={objectiveActions.onDelete} />
-      ) : null}
-      {activeView === 'calls' ? (
-        <>
-          <StageBar stages={stages} selectedStageId={selectedStageId} onSelect={selectStage} onCreate={createStage} />
-          <ColdCalling key={selectedStageId} leads={leads} analytics={analytics?.calls} scripts={scripts} onImport={importLeads} onLogCall={logCall} onUpdateLead={updateLead} />
-        </>
-      ) : null}
-      {activeView === 'lead-database' ? (
-        <>
-          <StageBar stages={stages} selectedStageId={selectedStageId} onSelect={selectStage} onCreate={createStage} />
-          <LeadDatabase leads={leads} onDeleteLead={deleteLead} onDeleteAllLeads={deleteAllLeads} />
-        </>
-      ) : null}
-    </Shell>
+    </>
   );
+}
+
+function LifeOSView({ activeView, records, selectedDate, onSelectDate, onOpenDailyRecord, onDeleteDailyRecord, onClearDailyRecord }) {
+  if (activeView === 'dashboard') {
+    return <LifeDashboard records={records} selectedDate={selectedDate} />;
+  }
+
+  if (activeView === 'daily-compliance') {
+    return (
+      <LifeDailyCompliance
+        records={records}
+        selectedDate={selectedDate}
+        onSelectDate={onSelectDate}
+        onOpenDate={onOpenDailyRecord}
+        onDeleteDate={onDeleteDailyRecord}
+        onClearDate={onClearDailyRecord}
+      />
+    );
+  }
+
+  return <LifeAnalyticsPage records={records} moduleId={activeView} />;
+}
+
+function getLifeViewFromPath(pathname) {
+  if (!pathname.startsWith('/life-os')) return 'dashboard';
+  const viewId = pathname.split('/')[2];
+  return viewId || 'dashboard';
 }
 
 function StageBar({ stages, selectedStageId, onSelect, onCreate }) {
