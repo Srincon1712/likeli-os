@@ -3,6 +3,7 @@ import { ColdCalling } from './components/ColdCalling.jsx';
 import { CommercialPipeline, CRM } from './components/CRM.jsx';
 import { Dashboard, CEODashboard } from './components/Dashboard.jsx';
 import { Finance } from './components/Finance.jsx';
+import { FocusClock } from './components/FocusClock.jsx';
 import { KnowledgeBase } from './components/KnowledgeBase.jsx';
 import { LeadDatabase } from './components/LeadDatabase.jsx';
 import { Objectives } from './components/Objectives.jsx';
@@ -15,6 +16,7 @@ import { LifeAnalyticsPage } from './components/life/LifeAnalyticsPage.jsx';
 import { LifeDailyCompliance } from './components/life/LifeDailyCompliance.jsx';
 import { LifeDashboard } from './components/life/LifeDashboard.jsx';
 import { api } from './lib/api.js';
+import { useFocusClock } from './lib/focusClock.js';
 import {
   clearDailyComplianceRecord,
   createDailyComplianceRecord,
@@ -27,6 +29,7 @@ import {
 } from './lib/lifeDailyCompliance.js';
 
 export default function App() {
+  const focusClock = useFocusClock();
   const [currentOS, setCurrentOS] = useState(() => (window.location.pathname.startsWith('/life-os') ? 'life' : 'likeli'));
   const [lifeActiveView, setLifeActiveView] = useState(() => getLifeViewFromPath(window.location.pathname));
   const [editingDailyRecord, setEditingDailyRecord] = useState(null);
@@ -133,7 +136,7 @@ export default function App() {
   function saveDailyCompliance(values) {
     const record = createDailyComplianceRecord({
       date: dailyCompliancePrompt.targetDateKey,
-      values,
+      values: applyFocusClockDeepFocus(dailyCompliancePrompt.targetDateKey, values, focusClock),
       promptedOn: dailyCompliancePrompt.promptDateKey
     });
     const nextRecords = saveDailyComplianceRecord(record);
@@ -146,7 +149,7 @@ export default function App() {
 
     const record = createDailyComplianceRecord({
       date: editingDailyRecord.date,
-      values,
+      values: applyFocusClockDeepFocus(editingDailyRecord.date, values, focusClock),
       promptedOn: editingDailyRecord.promptedOn
     });
     const nextRecords = saveDailyComplianceRecord(record);
@@ -310,6 +313,7 @@ export default function App() {
       {dailyCompliancePrompt.shouldShow ? (
         <DailyCompliancePopup
           targetDisplayDate={dailyCompliancePrompt.targetDisplayDate}
+          initialValues={getFocusClockInitialValues(dailyCompliancePrompt.targetDateKey, {}, focusClock)}
           onSave={saveDailyCompliance}
           onCancel={() => setDailyCompliancePrompt((currentPrompt) => ({ ...currentPrompt, shouldShow: false }))}
         />
@@ -319,13 +323,28 @@ export default function App() {
         <DailyCompliancePopup
           mode="edit"
           targetDisplayDate={formatDisplayDate(editingDailyRecord.date)}
-          initialValues={editingDailyRecord.values}
+          initialValues={getFocusClockInitialValues(editingDailyRecord.date, editingDailyRecord.values, focusClock)}
           onSave={saveEditedDailyCompliance}
           onCancel={() => setEditingDailyRecord(null)}
         />
       ) : null}
+
+      <FocusClock focusClock={focusClock} />
     </>
   );
+}
+
+function getFocusClockInitialValues(date, values, focusClock) {
+  const accumulatedHours = focusClock.getAccumulatedHoursForDate(date);
+  if (accumulatedHours <= 0) return values;
+  return {
+    ...values,
+    deep_focus: accumulatedHours
+  };
+}
+
+function applyFocusClockDeepFocus(date, values, focusClock) {
+  return getFocusClockInitialValues(date, values, focusClock);
 }
 
 function LifeOSView({ activeView, records, selectedDate, onSelectDate, onOpenDailyRecord, onDeleteDailyRecord, onClearDailyRecord }) {
