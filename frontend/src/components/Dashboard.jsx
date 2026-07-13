@@ -1,4 +1,5 @@
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { ArrowUpRight, Orbit } from 'lucide-react';
 import { Header, StatCard } from './Shell.jsx';
 import { money } from './osUtils.jsx';
 
@@ -18,6 +19,21 @@ export function Dashboard({ analytics, leads, productivityItems }) {
         eyebrow="Likeli / Command Center"
         title="Dashboard"
         description="Resumen operativo del negocio: ventas, caja, llamadas, objetivos y foco diario."
+        right={
+          <a
+            href="/playground/"
+            className="group inline-flex min-h-11 items-center gap-3 rounded-xl border border-signal/25 bg-signal/[0.08] px-3.5 py-2 text-left shadow-glow transition duration-300 hover:-translate-y-0.5 hover:border-signal/45 hover:bg-signal/[0.13]"
+          >
+            <span className="grid h-7 w-7 place-items-center rounded-lg border border-signal/20 bg-signal/10 text-ice">
+              <Orbit size={15} strokeWidth={1.8} />
+            </span>
+            <span>
+              <span className="block text-[9px] font-mono uppercase tracking-[0.15em] text-signal/70">Experimental</span>
+              <span className="block text-[13px] font-medium text-white">Abrir Playground</span>
+            </span>
+            <ArrowUpRight size={14} className="ml-1 text-slate-500 transition group-hover:text-ice" />
+          </a>
+        }
       />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
