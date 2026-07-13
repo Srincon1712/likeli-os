@@ -38,6 +38,8 @@ a { text-decoration: none; }
 }
 
 .ambient-light {
+  --ambient-x: 0px;
+  --ambient-y: 0px;
   position: fixed;
   z-index: -1;
   top: 18vh;
@@ -46,7 +48,9 @@ a { text-decoration: none; }
   height: min(70vw, 900px);
   border-radius: 50%;
   background: radial-gradient(circle, rgba(50, 127, 151, 0.09), transparent 68%);
-  transform: translateX(-50%);
+  transform: translate3d(calc(-50% + var(--ambient-x)), var(--ambient-y), 0);
+  transition: transform 1400ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
   pointer-events: none;
 }
 
@@ -134,6 +138,8 @@ a { text-decoration: none; }
 .life-map {
   --camera-x: 0px;
   --camera-y: 0px;
+  --reflection-x: 0px;
+  --reflection-y: 0px;
   position: relative;
   width: min(1220px, 100%);
   height: clamp(680px, 66vw, 790px);
@@ -146,8 +152,24 @@ a { text-decoration: none; }
 
 .ecosystem.is-visible .life-map { opacity: 1; transform: translate3d(var(--camera-x), var(--camera-y), 0) scale(1); }
 .connection-layer { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
-.connection { fill: none; stroke: rgba(133, 189, 206, 0.16); stroke-width: 0.1; transition: stroke 500ms ease, stroke-width 500ms ease; }
+.connection {
+  fill: none;
+  stroke: rgba(133, 189, 206, 0.16);
+  stroke-width: 0.1;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  transition: stroke 500ms ease, stroke-width 500ms ease;
+}
 .connection.is-active { stroke: rgba(167, 222, 236, 0.58); stroke-width: 0.16; }
+.ecosystem.is-visible .connection { animation: connection-build 1500ms 240ms cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+.connection-layer g:nth-child(2) .connection { animation-delay: 310ms; }
+.connection-layer g:nth-child(3) .connection { animation-delay: 380ms; }
+.connection-layer g:nth-child(4) .connection { animation-delay: 450ms; }
+.connection-layer g:nth-child(5) .connection { animation-delay: 520ms; }
+.connection-layer g:nth-child(6) .connection { animation-delay: 590ms; }
+.connection-layer g:nth-child(7) .connection { animation-delay: 660ms; }
+.connection-particle { fill: rgba(202, 235, 243, 0.66); opacity: 0; }
+.ecosystem.is-visible .connection-particle { animation: particle-materialize 900ms 1250ms ease forwards; }
 
 .life-node {
   position: absolute;
@@ -160,6 +182,9 @@ a { text-decoration: none; }
   border: 1px solid rgba(220, 242, 247, 0.105);
   border-radius: 20px;
   outline: none;
+  overflow: hidden;
+  isolation: isolate;
+  opacity: 0;
   background: linear-gradient(145deg, rgba(210, 239, 246, 0.075), rgba(18, 34, 44, 0.34));
   box-shadow: inset 0 1px rgba(255, 255, 255, 0.055), 0 12px 32px rgba(0, 0, 0, 0.08);
   backdrop-filter: blur(12px) saturate(105%);
@@ -167,6 +192,38 @@ a { text-decoration: none; }
   text-align: left;
   transition: transform 520ms cubic-bezier(0.22, 1, 0.36, 1), border-color 420ms ease, background-color 420ms ease;
   contain: layout paint;
+}
+
+.ecosystem.is-visible .life-node {
+  animation: node-reveal 820ms var(--reveal-delay) ease forwards;
+}
+
+.life-node::before {
+  position: absolute;
+  z-index: 0;
+  top: -55px;
+  left: -72px;
+  width: 82px;
+  height: 180px;
+  background: linear-gradient(90deg, transparent, rgba(231, 248, 251, 0.075), transparent);
+  content: "";
+  opacity: 0.7;
+  transform: translate3d(calc(34px + var(--reflection-x)), var(--reflection-y), 0) rotate(17deg);
+  transition: transform 1100ms cubic-bezier(0.22, 1, 0.36, 1), opacity 500ms ease;
+  will-change: transform;
+  pointer-events: none;
+}
+
+.life-node::after {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 1px rgba(239, 250, 252, 0.12);
+  content: "";
+  opacity: 0.25;
+  animation: card-light 10s var(--card-delay) ease-in-out infinite;
+  pointer-events: none;
 }
 
 .life-node:hover, .life-node:focus-visible, .life-node.is-active {
@@ -177,6 +234,8 @@ a { text-decoration: none; }
 }
 
 .node-icon {
+  position: relative;
+  z-index: 1;
   display: grid;
   width: 36px;
   height: 36px;
@@ -187,11 +246,11 @@ a { text-decoration: none; }
   background: rgba(205, 238, 245, 0.07);
 }
 
-.node-copy { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
+.node-copy { position: relative; z-index: 1; display: flex; min-width: 0; flex-direction: column; gap: 4px; }
 .node-title { overflow: hidden; color: #e5eef0; font-size: 14px; font-weight: 500; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
 .node-status { overflow: hidden; color: #71838b; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.node-progress { position: absolute; right: 17px; bottom: 10px; left: 17px; height: 1px; overflow: hidden; background: rgba(195, 228, 236, 0.07); }
-.node-progress::after { display: block; width: var(--progress); height: 100%; background: rgba(153, 214, 229, 0.48); content: ""; }
+.node-progress { position: absolute; z-index: 1; right: 17px; bottom: 10px; left: 17px; height: 1px; overflow: hidden; background: rgba(195, 228, 236, 0.07); }
+.node-progress::after { display: block; width: var(--progress); height: 100%; background: rgba(153, 214, 229, 0.48); content: ""; transform-origin: left; animation: progress-breathe 7s var(--progress-delay) ease-in-out infinite; }
 
 .core-node {
   position: absolute;
@@ -206,7 +265,8 @@ a { text-decoration: none; }
   border: 1px solid rgba(224, 244, 248, 0.18);
   border-radius: 50%;
   outline: none;
-  overflow: hidden;
+  overflow: visible;
+  isolation: isolate;
   background: rgba(21, 42, 54, 0.42);
   box-shadow: inset 0 1px rgba(255, 255, 255, 0.11), 0 18px 55px rgba(0, 0, 0, 0.1);
   backdrop-filter: blur(14px) saturate(108%);
@@ -214,11 +274,21 @@ a { text-decoration: none; }
   transition: transform 600ms cubic-bezier(0.22, 1, 0.36, 1), border-color 500ms ease;
 }
 
-.core-surface { position: absolute; inset: 0; background: radial-gradient(circle at 35% 27%, rgba(232, 249, 252, 0.13), transparent 43%); animation: core-breathe 8s ease-in-out infinite; }
+.core-surface { position: absolute; z-index: 0; inset: 0; overflow: hidden; border-radius: 50%; background: radial-gradient(circle at 35% 27%, rgba(232, 249, 252, 0.105), transparent 43%); animation: core-light 9s ease-in-out infinite; }
+.core-surface::before { position: absolute; top: -30%; left: -45%; width: 72%; height: 160%; background: linear-gradient(90deg, transparent, rgba(236, 250, 252, 0.1), transparent); content: ""; transform: translate3d(calc(24px + var(--reflection-x)), var(--reflection-y), 0) rotate(18deg); transition: transform 1200ms cubic-bezier(0.22, 1, 0.36, 1); will-change: transform; }
 .core-node:hover, .core-node:focus-visible { border-color: rgba(218, 243, 248, 0.32); transform: translate3d(-50%, -50%, 0) scale(1.018); }
-.core-title { position: relative; color: #eef6f7; font-size: 20px; font-weight: 560; letter-spacing: 0.13em; }
-.core-caption { position: relative; margin-top: 8px; color: #74878f; font-size: 10px; }
-.core-status { position: relative; width: 4px; height: 4px; margin-top: 15px; border-radius: 50%; background: #a4d9e4; opacity: 0.75; }
+.core-title { position: relative; z-index: 2; color: #eef6f7; font-size: 19px; font-weight: 560; letter-spacing: 0.11em; }
+.core-caption { position: relative; z-index: 2; margin-top: 8px; color: #74878f; font-size: 10px; }
+.core-status { position: relative; z-index: 2; width: 4px; height: 4px; margin-top: 15px; border-radius: 50%; background: #a4d9e4; opacity: 0.75; animation: status-pulse 4.8s ease-in-out infinite; }
+.core-wave { position: absolute; z-index: -1; inset: -1px; border: 1px solid rgba(177, 224, 235, 0.14); border-radius: 50%; opacity: 0; pointer-events: none; animation: core-wave 8s ease-out infinite; }
+.core-wave-two { animation-delay: 4s; }
+.core-particles { position: absolute; z-index: -1; inset: -34px; border-radius: 50%; pointer-events: none; }
+.core-particles i { --particle-x: 0px; --particle-y: -30px; --particle-outer-x: 0px; --particle-outer-y: -50px; position: absolute; top: 50%; left: 50%; width: 2px; height: 2px; border-radius: 50%; background: rgba(188, 228, 237, 0.72); opacity: 0; animation: core-particle 8s var(--particle-delay) ease-in-out infinite; }
+.core-particles i:nth-child(2) { --particle-x: 29px; --particle-y: -17px; --particle-outer-x: 48px; --particle-outer-y: -28px; }
+.core-particles i:nth-child(3) { --particle-x: 29px; --particle-y: 17px; --particle-outer-x: 48px; --particle-outer-y: 28px; }
+.core-particles i:nth-child(4) { --particle-x: 0px; --particle-y: 30px; --particle-outer-x: 0px; --particle-outer-y: 50px; }
+.core-particles i:nth-child(5) { --particle-x: -29px; --particle-y: 17px; --particle-outer-x: -48px; --particle-outer-y: 28px; }
+.core-particles i:nth-child(6) { --particle-x: -29px; --particle-y: -17px; --particle-outer-x: -48px; --particle-outer-y: -28px; }
 
 .quiet-summary {
   display: grid;
@@ -267,7 +337,15 @@ a { text-decoration: none; }
 .detail-meta { display: flex; align-items: center; justify-content: space-between; padding-top: 18px; border-top: 1px solid rgba(218, 241, 246, 0.09); color: #8aa3aa; font-size: 11px; }
 
 @keyframes welcome-in { from { opacity: 0; transform: translate3d(0, 15px, 0); } to { opacity: 1; transform: translate3d(0, 0, 0); } }
-@keyframes core-breathe { 0%, 100% { opacity: 0.72; transform: scale(1); } 50% { opacity: 1; transform: scale(1.015); } }
+@keyframes connection-build { to { stroke-dashoffset: 0; } }
+@keyframes particle-materialize { to { opacity: 0.72; } }
+@keyframes node-reveal { from { opacity: 0; } to { opacity: 1; } }
+@keyframes card-light { 0%, 100% { opacity: 0.18; } 50% { opacity: 0.52; } }
+@keyframes progress-breathe { 0%, 100% { opacity: 0.48; transform: scaleX(0.985); } 50% { opacity: 0.95; transform: scaleX(1); } }
+@keyframes core-light { 0%, 100% { opacity: 0.72; } 50% { opacity: 1; } }
+@keyframes core-wave { 0% { opacity: 0; transform: scale(0.96); } 18% { opacity: 0.3; } 70%, 100% { opacity: 0; transform: scale(1.28); } }
+@keyframes core-particle { 0%, 100% { opacity: 0; transform: translate3d(var(--particle-outer-x), var(--particle-outer-y), 0) scale(0.4); } 40% { opacity: 0.58; } 72% { opacity: 0.2; transform: translate3d(var(--particle-x), var(--particle-y), 0) scale(1); } }
+@keyframes status-pulse { 0%, 100% { opacity: 0.45; transform: scale(0.85); } 50% { opacity: 0.9; transform: scale(1.1); } }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes detail-in { from { opacity: 0; transform: translate3d(0, 12px, 0) scale(0.985); } to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); } }
 
