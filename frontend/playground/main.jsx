@@ -1,164 +1,325 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Activity, ArrowUpRight, CalendarDays, CircleDollarSign, Command, Heart, Layers3, Lightbulb, Network, Orbit, Search, Sparkles, Timer, UserRound, X } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowUpRight,
+  CalendarDays,
+  CircleDollarSign,
+  Heart,
+  Layers3,
+  Lightbulb,
+  Timer,
+  UserRound,
+  X
+} from 'lucide-react';
 import './styles.css';
 
-const systems = [
-  { id: 'individual', title: 'Individual', eyebrow: 'SELF', description: 'Energy, body and inner signal.', icon: UserRound, x: 13, y: 34, status: 'Balanced', progress: 78, notifications: 2 },
-  { id: 'knowledge', title: 'Knowledge', eyebrow: 'MIND', description: 'Ideas becoming understanding.', icon: Lightbulb, x: 29, y: 12, status: '3 new threads', progress: 64, notifications: 3 },
-  { id: 'projects', title: 'Projects', eyebrow: 'CREATE', description: 'From intention to momentum.', icon: Layers3, x: 73, y: 14, status: 'In flow', progress: 52, notifications: 1 },
-  { id: 'finance', title: 'Finance', eyebrow: 'RESOURCE', description: 'A clear view of your runway.', icon: CircleDollarSign, x: 87, y: 38, status: 'On track', progress: 84, notifications: 0 },
-  { id: 'relationships', title: 'Relationships', eyebrow: 'CONNECT', description: 'The people who make life rich.', icon: Heart, x: 79, y: 76, status: '2 moments', progress: 71, notifications: 2 },
-  { id: 'time', title: 'Time', eyebrow: 'RHYTHM', description: 'Your attention, intentionally placed.', icon: Timer, x: 53, y: 90, status: '06:42 focused', progress: 69, notifications: 0 },
-  { id: 'organization', title: 'Organization', eyebrow: 'ORDER', description: 'Less noise. More signal.', icon: CalendarDays, x: 20, y: 76, status: 'Quiet', progress: 91, notifications: 0 }
+const LIFE_AREAS = [
+  { id: 'individual', title: 'Individual', description: 'Energy, body and inner balance.', icon: UserRound, x: 13, y: 35, status: 'Balanced', progress: 78, notifications: 2 },
+  { id: 'knowledge', title: 'Knowledge', description: 'Ideas becoming understanding.', icon: Lightbulb, x: 29, y: 13, status: '3 new threads', progress: 64, notifications: 3 },
+  { id: 'projects', title: 'Projects', description: 'Intention becoming momentum.', icon: Layers3, x: 72, y: 13, status: 'In flow', progress: 52, notifications: 1 },
+  { id: 'finance', title: 'Finance', description: 'A clear view of your resources.', icon: CircleDollarSign, x: 87, y: 36, status: 'On track', progress: 84, notifications: 0 },
+  { id: 'relationships', title: 'Relationships', description: 'The people who make life rich.', icon: Heart, x: 79, y: 75, status: '2 moments', progress: 71, notifications: 2 },
+  { id: 'time', title: 'Time', description: 'Attention, intentionally placed.', icon: Timer, x: 52, y: 88, status: '6h 42m focused', progress: 69, notifications: 0 },
+  { id: 'organization', title: 'Organization', description: 'Less noise. More clarity.', icon: CalendarDays, x: 19, y: 75, status: 'Quiet', progress: 91, notifications: 0 }
 ];
 
-function NeuralBackground({ pointer, activeId }) {
-  const canvasRef = useRef(null);
-  const pointerRef = useRef(pointer);
-  const activeRef = useRef(activeId);
-  const nodes = useMemo(() => Array.from({ length: 90 }, (_, index) => ({
-    x: ((index * 47) % 1000) / 1000,
-    y: ((index * 83 + 17) % 1000) / 1000,
-    r: 0.5 + ((index * 13) % 10) / 10,
-    speed: 0.00008 + ((index * 7) % 5) * 0.00002,
-    phase: index * 0.7
-  })), []);
+function getGreeting(hour) {
+  if (hour < 12) return 'Good morning.';
+  if (hour < 18) return 'Good afternoon.';
+  return 'Good evening.';
+}
 
-  useEffect(() => { pointerRef.current = pointer; }, [pointer]);
-  useEffect(() => { activeRef.current = activeId; }, [activeId]);
+function getMoment(date) {
+  return {
+    greeting: getGreeting(date.getHours()),
+    time: new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(date),
+    date: new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(date)
+  };
+}
+
+const NeuralBackground = memo(function NeuralBackground({ pointerRef }) {
+  const canvasRef = useRef(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    const context = canvas.getContext('2d');
-    let frame;
+    const context = canvas.getContext('2d', { alpha: true });
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const nodes = Array.from({ length: 42 }, (_, index) => ({
+      x: ((index * 47) % 1000) / 1000,
+      y: ((index * 83 + 17) % 1000) / 1000,
+      radius: 0.45 + ((index * 13) % 7) / 10,
+      phase: index * 0.73
+    }));
+    let frame = 0;
+    let lastPaint = 0;
     let width = 0;
     let height = 0;
-    const resize = () => {
-      const ratio = Math.min(window.devicePixelRatio || 1, 1.5);
+    let visible = !document.hidden;
+
+    function resize() {
+      const ratio = Math.min(window.devicePixelRatio || 1, 1.25);
       width = window.innerWidth;
       height = window.innerHeight;
-      canvas.width = width * ratio;
-      canvas.height = height * ratio;
+      canvas.width = Math.round(width * ratio);
+      canvas.height = Math.round(height * ratio);
       canvas.style.width = `${width}px`;
       canvas.style.height = `${height}px`;
       context.setTransform(ratio, 0, 0, ratio, 0, 0);
-    };
-    resize();
-    window.addEventListener('resize', resize);
-    const draw = (time) => {
-      const pulse = time * 0.001;
-      const p = pointerRef.current;
+    }
+
+    function paint(time = 0) {
       context.clearRect(0, 0, width, height);
-      const points = nodes.map((node) => {
-        const driftX = Math.sin(pulse * node.speed * 5000 + node.phase) * 10;
-        const driftY = Math.cos(pulse * node.speed * 4200 + node.phase) * 8;
-        return { ...node, px: node.x * width + driftX, py: node.y * height + driftY };
-      });
-      context.lineWidth = 0.45;
+      const pointer = pointerRef.current;
+      const points = nodes.map((node) => ({
+        ...node,
+        px: node.x * width + Math.sin(time * 0.00008 + node.phase) * 3,
+        py: node.y * height + Math.cos(time * 0.00007 + node.phase) * 2.5
+      }));
+
+      context.lineWidth = 0.4;
       points.forEach((point, index) => {
-        points.slice(index + 1, index + 5).forEach((target) => {
-          const dx = target.px - point.px;
-          const dy = target.py - point.py;
-          const distance = Math.hypot(dx, dy);
-          if (distance > 175) return;
-          const cursorDistance = Math.hypot(point.px - p.x, point.py - p.y);
-          const alpha = Math.max(0.025, 0.11 - distance / 2200) + Math.max(0, 0.06 - cursorDistance / 700);
-          context.strokeStyle = `rgba(77, 177, 218, ${alpha})`;
+        points.slice(index + 1, index + 3).forEach((target) => {
+          const distance = Math.hypot(target.px - point.px, target.py - point.py);
+          if (distance > 210) return;
+          context.strokeStyle = `rgba(107, 179, 204, ${Math.max(0.018, 0.065 - distance / 4400)})`;
           context.beginPath();
           context.moveTo(point.px, point.py);
-          context.quadraticCurveTo((point.px + target.px) / 2 + Math.sin(pulse + index) * 8, (point.py + target.py) / 2 + Math.cos(pulse + index) * 8, target.px, target.py);
+          context.quadraticCurveTo(
+            (point.px + target.px) / 2,
+            (point.py + target.py) / 2 + Math.sin(index) * 4,
+            target.px,
+            target.py
+          );
           context.stroke();
         });
       });
-      points.forEach((point, index) => {
-        const cursorDistance = Math.hypot(point.px - p.x, point.py - p.y);
-        const glow = Math.max(0, 1 - cursorDistance / 220);
-        context.fillStyle = `rgba(133, 220, 247, ${0.14 + glow * 0.22})`;
+
+      points.forEach((point) => {
+        const cursorDistance = Math.hypot(point.px - pointer.x, point.py - pointer.y);
+        const response = Math.max(0, 1 - cursorDistance / 180);
+        context.fillStyle = `rgba(164, 218, 234, ${0.08 + response * 0.1})`;
         context.beginPath();
-        context.arc(point.px, point.py, point.r + glow * 1.5, 0, Math.PI * 2);
+        context.arc(point.px, point.py, point.radius + response * 0.5, 0, Math.PI * 2);
         context.fill();
-        if (index % 7 === Math.floor((pulse * 0.45 + index) % 7)) {
-          context.fillStyle = 'rgba(189, 243, 255, 0.65)';
-          context.beginPath();
-          context.arc(point.px, point.py, point.r + 1.4, 0, Math.PI * 2);
-          context.fill();
-        }
       });
-      if (activeRef.current) {
-        const halo = context.createRadialGradient(p.x, p.y, 0, p.x, p.y, 260);
-        halo.addColorStop(0, 'rgba(74, 192, 231, 0.045)');
-        halo.addColorStop(1, 'rgba(74, 192, 231, 0)');
-        context.fillStyle = halo;
-        context.fillRect(0, 0, width, height);
+    }
+
+    function draw(time) {
+      if (!visible) return;
+      if (time - lastPaint > 32) {
+        paint(time);
+        lastPaint = time;
       }
       frame = requestAnimationFrame(draw);
+    }
+
+    function handleVisibility() {
+      visible = !document.hidden;
+      cancelAnimationFrame(frame);
+      if (visible && !reducedMotion) frame = requestAnimationFrame(draw);
+    }
+
+    resize();
+    paint();
+    if (!reducedMotion) frame = requestAnimationFrame(draw);
+    window.addEventListener('resize', resize, { passive: true });
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('resize', resize);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
-    frame = requestAnimationFrame(draw);
-    return () => { cancelAnimationFrame(frame); window.removeEventListener('resize', resize); };
-  }, [nodes]);
+  }, [pointerRef]);
 
   return <canvas ref={canvasRef} className="neural-canvas" aria-hidden="true" />;
-}
+});
 
-function NeuralConnections({ activeId }) {
-  return <svg className="connection-layer" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-    {systems.map((system, index) => {
-      const active = activeId === system.id;
-      const cx = system.x > 50 ? 57 : 43;
-      const cy = system.y > 50 ? 58 : 42;
-      return <path key={system.id} className={active ? 'connection connection-active' : 'connection'} d={`M 50 50 C ${cx} ${cy}, ${cx} ${cy}, ${system.x} ${system.y}`} style={{ animationDelay: `${index * 0.35}s` }} />;
-    })}
-  </svg>;
-}
+const NeuralConnections = memo(function NeuralConnections({ activeId }) {
+  return (
+    <svg className="connection-layer" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+      {LIFE_AREAS.map((area) => {
+        const controlX = area.x > 50 ? 58 : 42;
+        const controlY = area.y > 50 ? 59 : 41;
+        return (
+          <path
+            key={area.id}
+            className={activeId === area.id ? 'connection is-active' : 'connection'}
+            d={`M 50 50 C ${controlX} ${controlY}, ${controlX} ${controlY}, ${area.x} ${area.y}`}
+          />
+        );
+      })}
+    </svg>
+  );
+});
 
-function GlassPanel({ children, className = '' }) { return <div className={`glass-panel ${className}`}>{children}</div>; }
+const LifeNode = memo(function LifeNode({ area, active, onHover, onLeave, onSelect }) {
+  const Icon = area.icon;
+  return (
+    <button
+      className={`life-node ${active ? 'is-active' : ''}`}
+      style={{ left: `${area.x}%`, top: `${area.y}%`, '--progress': `${area.progress}%` }}
+      onMouseEnter={() => onHover(area.id)}
+      onMouseLeave={onLeave}
+      onFocus={() => onHover(area.id)}
+      onBlur={onLeave}
+      onClick={() => onSelect(area)}
+    >
+      <span className="node-icon"><Icon size={18} strokeWidth={1.45} /></span>
+      <span className="node-copy">
+        <span className="node-title">{area.title}</span>
+        <span className="node-status">{area.status}</span>
+      </span>
+      <span className="node-progress" />
+    </button>
+  );
+});
 
-function LifeNode({ system, active, onHover, onLeave, onSelect }) {
-  const Icon = system.icon;
-  return <button className={`life-node ${active ? 'is-active' : ''}`} style={{ left: `${system.x}%`, top: `${system.y}%` }} onMouseEnter={() => onHover(system.id)} onMouseLeave={onLeave} onFocus={() => onHover(system.id)} onBlur={onLeave} onClick={() => onSelect(system)}>
-    <span className="node-icon"><Icon size={17} strokeWidth={1.5} /></span>
-    <span className="node-copy"><span className="node-eyebrow">{system.eyebrow}</span><span className="node-title">{system.title}</span><span className="node-status">{system.status}</span></span>
-    {system.notifications > 0 && <span className="notification-dot">{system.notifications}</span>}
-    <span className="node-progress" style={{ '--progress': `${system.progress}%` }} />
-  </button>;
-}
+const CoreNode = memo(function CoreNode({ onSelect }) {
+  return (
+    <button
+      className="core-node"
+      onClick={() => onSelect({ title: 'Core', description: 'Your life, seen as one connected whole.' })}
+    >
+      <span className="core-surface" />
+      <span className="core-title">CORE</span>
+      <span className="core-caption">Everything connects here</span>
+      <span className="core-status" />
+    </button>
+  );
+});
 
-function CoreNode({ booted, onSelect }) {
-  return <button className={`core-node ${booted ? 'is-booted' : ''}`} onClick={() => onSelect({ title: 'LIKELI Core', description: 'Your life, seen as one connected system.' })}>
-    <span className="core-ring core-ring-one" /><span className="core-ring core-ring-two" /><span className="core-orbit"><Orbit size={14} /></span>
-    <span className="core-label">LIKELI</span><span className="core-title">CORE</span><span className="core-caption">life operating system</span><span className="core-pulse" />
-  </button>;
+function DetailPanel({ area, onClose }) {
+  if (!area) return null;
+  const Icon = area.icon || UserRound;
+  return (
+    <div className="detail-scrim" onClick={onClose} role="presentation">
+      <div className="detail-panel" onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="detail-title">
+        <button className="detail-close" aria-label="Close" onClick={onClose}><X size={17} /></button>
+        <div className="detail-icon"><Icon size={20} strokeWidth={1.4} /></div>
+        <p className="detail-label">Part of your life</p>
+        <h2 id="detail-title">{area.title}</h2>
+        <p className="detail-description">{area.description}</p>
+        <div className="detail-meta"><span>Ready to explore</span><ArrowUpRight size={15} /></div>
+      </div>
+    </div>
+  );
 }
 
 function App() {
-  const [pointer, setPointer] = useState({ x: 0, y: 0 });
+  const pointerRef = useRef({ x: -1000, y: -1000 });
+  const mapRef = useRef(null);
+  const ecosystemRef = useRef(null);
   const [activeId, setActiveId] = useState(null);
   const [selected, setSelected] = useState(null);
-  const [booted, setBooted] = useState(false);
-  useEffect(() => { const timer = setTimeout(() => setBooted(true), 180); return () => clearTimeout(timer); }, []);
-  useEffect(() => { const move = (event) => setPointer({ x: event.clientX, y: event.clientY }); window.addEventListener('pointermove', move, { passive: true }); return () => window.removeEventListener('pointermove', move); }, []);
-  const cameraStyle = { transform: `translate3d(${(pointer.x / window.innerWidth - 0.5) * -8}px, ${(pointer.y / window.innerHeight - 0.5) * -5}px)` };
-  return <main className="playground-shell">
-    <NeuralBackground pointer={pointer} activeId={activeId} />
-    <div className="ambient ambient-left" /><div className="ambient ambient-right" />
-    <section className="hud" style={cameraStyle}>
+  const [moment, setMoment] = useState(() => getMoment(new Date()));
+  const handleLeaveArea = useCallback(() => setActiveId(null), []);
+  const handleSelectArea = useCallback((area) => setSelected(area), []);
+  const handleCloseDetail = useCallback(() => setSelected(null), []);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setMoment(getMoment(new Date())), 60_000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    let pendingFrame = 0;
+    function handlePointer(event) {
+      pointerRef.current.x = event.clientX;
+      pointerRef.current.y = event.clientY;
+      if (pendingFrame || !mapRef.current) return;
+      pendingFrame = requestAnimationFrame(() => {
+        const x = (pointerRef.current.x / window.innerWidth - 0.5) * -3;
+        const y = (pointerRef.current.y / window.innerHeight - 0.5) * -2;
+        mapRef.current?.style.setProperty('--camera-x', `${x}px`);
+        mapRef.current?.style.setProperty('--camera-y', `${y}px`);
+        pendingFrame = 0;
+      });
+    }
+    window.addEventListener('pointermove', handlePointer, { passive: true });
+    return () => {
+      cancelAnimationFrame(pendingFrame);
+      window.removeEventListener('pointermove', handlePointer);
+    };
+  }, []);
+
+  useEffect(() => {
+    const section = ecosystemRef.current;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          section.classList.add('is-visible');
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.16 }
+    );
+    observer.observe(section);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <main className="playground-shell">
+      <NeuralBackground pointerRef={pointerRef} />
+      <div className="ambient-light" aria-hidden="true" />
+
       <header className="topbar">
-        <div className="brand-lockup"><div className="brand-mark"><Network size={16} /></div><div><div className="brand-name">LIKELI</div><div className="brand-subtitle">human operating system</div></div></div>
-        <div className="system-state"><span className="state-dot" />all systems present <span className="state-divider" /> <span className="mono">07:42</span></div>
-        <div className="top-actions"><button className="icon-button" aria-label="Search"><Search size={17} /></button><button className="icon-button" aria-label="Command menu"><Command size={17} /></button><div className="avatar">S</div></div>
+        <a href="/" className="back-link"><ArrowLeft size={15} /> Dashboard</a>
+        <div className="topbar-moment">
+          <span>{moment.date}</span>
+          <time>{moment.time}</time>
+          <span className="avatar">S</span>
+        </div>
       </header>
-      <div className="intro"><div className="kicker"><Sparkles size={13} /> MORNING SYNTHESIS <span className="kicker-line" /></div><h1>Good morning, Sebastian.</h1><p>Your life is in motion. Here is the signal.</p></div>
-      <div className="orbit-stage" style={cameraStyle}>
-        <NeuralConnections activeId={activeId} />
-        <div className="stage-grid" />
-        {systems.map((system) => <LifeNode key={system.id} system={system} active={activeId === system.id} onHover={setActiveId} onLeave={() => setActiveId(null)} onSelect={setSelected} />)}
-        <CoreNode booted={booted} onSelect={setSelected} />
-      </div>
-      <div className="bottom-deck"><GlassPanel className="signal-panel"><div className="panel-heading"><span className="panel-label"><Activity size={13} /> LIVE SIGNAL</span><span className="panel-time">just now</span></div><p>Momentum is building around <span>Projects</span>. Your best next move is already close.</p><div className="signal-wave"><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /></div></GlassPanel><GlassPanel className="focus-panel"><div className="panel-heading"><span className="panel-label"><Timer size={13} /> FOCUS WINDOW</span><span className="panel-time">TODAY</span></div><div className="focus-readout"><strong>06<span>:</span>42</strong><div><span>deep focus</span><small>82% of intention</small></div></div><div className="focus-track"><span /></div></GlassPanel><div className="footer-note"><span className="pulse-icon" /> neural map synced<br /><span className="muted">move through your systems</span></div></div>
-    </section>
-    {selected && <div className="detail-scrim" onClick={() => setSelected(null)}><GlassPanel className="detail-panel" ><button className="detail-close" aria-label="Close" onClick={() => setSelected(null)}><X size={17} /></button><div className="detail-orb"><Sparkles size={18} /></div><span className="node-eyebrow">SYSTEM ONLINE</span><h2>{selected.title}</h2><p>{selected.description}</p><div className="detail-meta"><span>exploration mode</span><ArrowUpRight size={14} /></div></GlassPanel></div>}
-  </main>;
+
+      <section className="welcome" aria-labelledby="welcome-title">
+        <div className="welcome-copy">
+          <p>{moment.greeting}</p>
+          <h1 id="welcome-title">Sebastian.</h1>
+        </div>
+        <div className="scroll-cue" aria-hidden="true"><span />Your life, in one view</div>
+      </section>
+
+      <section ref={ecosystemRef} className="ecosystem" aria-labelledby="ecosystem-title">
+        <div className="section-heading">
+          <p>Your world</p>
+          <h2 id="ecosystem-title">Everything that matters,<br />connected.</h2>
+        </div>
+
+        <div ref={mapRef} className="life-map">
+          <NeuralConnections activeId={activeId} />
+          {LIFE_AREAS.map((area) => (
+            <LifeNode
+              key={area.id}
+              area={area}
+              active={activeId === area.id}
+              onHover={setActiveId}
+              onLeave={handleLeaveArea}
+              onSelect={handleSelectArea}
+            />
+          ))}
+          <CoreNode onSelect={handleSelectArea} />
+        </div>
+
+        <div className="quiet-summary">
+          <article>
+            <p>Today</p>
+            <h3>Momentum is building.</h3>
+            <span>Projects are moving with less resistance.</span>
+          </article>
+          <article>
+            <p>Focus</p>
+            <h3>6h 42m</h3>
+            <span>Intentional time today</span>
+          </article>
+        </div>
+      </section>
+
+      <DetailPanel area={selected} onClose={handleCloseDetail} />
+    </main>
+  );
 }
 
-createRoot(document.getElementById('playground-root')).render(<React.StrictMode><App /></React.StrictMode>);
+createRoot(document.getElementById('playground-root')).render(
+  <React.StrictMode><App /></React.StrictMode>
+);
