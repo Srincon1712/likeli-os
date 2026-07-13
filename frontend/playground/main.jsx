@@ -1,18 +1,18 @@
-import React, { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   ArrowLeft,
-  ArrowUpRight,
   CalendarDays,
   CircleDollarSign,
   Heart,
   Layers3,
   Lightbulb,
   Timer,
-  UserRound,
-  X
+  UserRound
 } from 'lucide-react';
 import './styles.css';
+
+const EcosystemWorld = lazy(() => import('./ecosystems/EcosystemWorld.jsx'));
 
 const LIFE_AREAS = [
   { id: 'individual', title: 'Individual', description: 'Energía, cuerpo y equilibrio interior.', icon: UserRound, x: 13, y: 35, status: 'En equilibrio', progress: 78, notifications: 2 },
@@ -38,7 +38,7 @@ function getMoment(date) {
   };
 }
 
-const NeuralBackground = memo(function NeuralBackground({ pointerRef }) {
+const NeuralBackground = memo(function NeuralBackground({ pointerRef, paused }) {
   const canvasRef = useRef(null);
 
   useEffect(() => {
@@ -147,12 +147,12 @@ const NeuralBackground = memo(function NeuralBackground({ pointerRef }) {
     function handleVisibility() {
       visible = !document.hidden;
       cancelAnimationFrame(frame);
-      if (visible && !reducedMotion) frame = requestAnimationFrame(draw);
+      if (visible && !reducedMotion && !paused) frame = requestAnimationFrame(draw);
     }
 
     resize();
     paint();
-    if (!reducedMotion) frame = requestAnimationFrame(draw);
+    if (!reducedMotion && !paused) frame = requestAnimationFrame(draw);
     window.addEventListener('resize', resize, { passive: true });
     document.addEventListener('visibilitychange', handleVisibility);
     return () => {
@@ -160,7 +160,7 @@ const NeuralBackground = memo(function NeuralBackground({ pointerRef }) {
       window.removeEventListener('resize', resize);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [pointerRef]);
+  }, [paused, pointerRef]);
 
   return <canvas ref={canvasRef} className="neural-canvas" aria-hidden="true" />;
 });
@@ -357,7 +357,7 @@ const CoreNode = memo(function CoreNode({ active, onSelect }) {
     <button
       className={`core-node ${active ? 'is-related' : ''}`}
       data-core
-      onClick={() => onSelect({ title: 'Núcleo', description: 'Tu vida, contemplada como un todo conectado.' })}
+      onClick={() => onSelect({ id: 'core', title: 'Núcleo', description: 'Tu vida, contemplada como un todo conectado.', x: 50, y: 50 })}
     >
       <span className="core-wave core-wave-one" />
       <span className="core-wave core-wave-two" />
@@ -373,23 +373,6 @@ const CoreNode = memo(function CoreNode({ active, onSelect }) {
     </button>
   );
 });
-
-function DetailPanel({ area, onClose }) {
-  if (!area) return null;
-  const Icon = area.icon || UserRound;
-  return (
-    <div className="detail-scrim" onClick={onClose} role="presentation">
-      <div className="detail-panel" onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="detail-title">
-        <button className="detail-close" aria-label="Cerrar" onClick={onClose}><X size={17} /></button>
-        <div className="detail-icon"><Icon size={20} strokeWidth={1.4} /></div>
-        <p className="detail-label">Parte de tu vida</p>
-        <h2 id="detail-title">{area.title}</h2>
-        <p className="detail-description">{area.description}</p>
-        <div className="detail-meta"><span>Listo para explorar</span><ArrowUpRight size={15} /></div>
-      </div>
-    </div>
-  );
-}
 
 function App() {
   const pointerRef = useRef({ x: -1000, y: -1000 });
@@ -409,6 +392,13 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!selected) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, [selected]);
+
+  useEffect(() => {
     if (!window.location.hash) return undefined;
     const frame = requestAnimationFrame(() => {
       const target = document.getElementById(decodeURIComponent(window.location.hash.slice(1)));
@@ -419,6 +409,7 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (selected) return undefined;
     let pendingFrame = 0;
     function handlePointer(event) {
       pointerRef.current.x = event.clientX;
@@ -441,7 +432,7 @@ function App() {
       cancelAnimationFrame(pendingFrame);
       window.removeEventListener('pointermove', handlePointer);
     };
-  }, []);
+  }, [selected]);
 
   useEffect(() => {
     const section = ecosystemRef.current;
@@ -459,8 +450,8 @@ function App() {
   }, []);
 
   return (
-    <main className="playground-shell">
-      <NeuralBackground pointerRef={pointerRef} />
+    <main className={`playground-shell ${selected ? 'has-active-world' : ''}`}>
+      <NeuralBackground pointerRef={pointerRef} paused={Boolean(selected)} />
       <div ref={ambientRef} className="ambient-light" aria-hidden="true" />
 
       <header className="topbar">
@@ -516,7 +507,11 @@ function App() {
         </div>
       </section>
 
-      <DetailPanel area={selected} onClose={handleCloseDetail} />
+      {selected ? (
+        <Suspense fallback={<div className="world-loading"><span />Entrando al sistema…</div>}>
+          <EcosystemWorld system={selected} onClose={handleCloseDetail} />
+        </Suspense>
+      ) : null}
     </main>
   );
 }

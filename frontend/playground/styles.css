@@ -28,6 +28,7 @@ a { text-decoration: none; }
     radial-gradient(circle at 52% 33%, rgba(24, 76, 96, 0.14), transparent 34rem),
     linear-gradient(180deg, #04090f 0%, #061019 53%, #050a10 100%);
 }
+.has-active-world .life-map *, .has-active-world .quiet-summary * { animation-play-state: paused !important; }
 
 .neural-canvas {
   position: fixed;
@@ -338,34 +339,8 @@ a { text-decoration: none; }
 .quiet-summary h3 { margin: 0 0 7px; color: #dce7e9; font-size: 18px; font-weight: 500; letter-spacing: -0.02em; }
 .quiet-summary span { color: #697b83; font-size: 11px; }
 
-.detail-scrim {
-  position: fixed;
-  z-index: 20;
-  inset: 0;
-  display: grid;
-  padding: 24px;
-  place-items: center;
-  background: rgba(3, 8, 13, 0.62);
-  animation: fade-in 260ms ease both;
-}
-
-.detail-panel {
-  position: relative;
-  width: min(390px, 100%);
-  padding: 34px;
-  border: 1px solid rgba(222, 243, 248, 0.13);
-  border-radius: 26px;
-  background: rgba(17, 32, 41, 0.94);
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.24), inset 0 1px rgba(255, 255, 255, 0.07);
-  animation: detail-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.detail-close { position: absolute; top: 17px; right: 17px; display: grid; width: 32px; height: 32px; place-items: center; border: 0; border-radius: 50%; color: #83959c; background: rgba(220, 241, 246, 0.055); }
-.detail-icon { display: grid; width: 44px; height: 44px; margin-bottom: 28px; place-items: center; border-radius: 14px; color: #b7e0e8; background: rgba(197, 232, 240, 0.07); }
-.detail-label { margin: 0 0 8px; color: #71848c; font-size: 11px; }
-.detail-panel h2 { margin: 0; color: #edf4f5; font-size: 29px; font-weight: 520; letter-spacing: -0.035em; }
-.detail-description { margin: 12px 0 32px; color: #8a9ca3; font-size: 14px; line-height: 1.6; }
-.detail-meta { display: flex; align-items: center; justify-content: space-between; padding-top: 18px; border-top: 1px solid rgba(218, 241, 246, 0.09); color: #8aa3aa; font-size: 11px; }
+.world-loading { position: fixed; z-index: 29; inset: 0; display: flex; align-items: center; justify-content: center; gap: 10px; color: #72868e; background: rgba(4, 10, 16, 0.98); font-size: 11px; }
+.world-loading span { width: 5px; height: 5px; border-radius: 50%; background: #9cced9; animation: status-pulse 1.8s ease-in-out infinite; }
 
 @keyframes welcome-in { from { opacity: 0; transform: translate3d(0, 15px, 0); } to { opacity: 1; transform: translate3d(0, 0, 0); } }
 @keyframes connection-build { to { stroke-dashoffset: 0; } }
@@ -381,8 +356,6 @@ a { text-decoration: none; }
 @keyframes core-particle { 0%, 100% { opacity: 0; transform: translate3d(var(--particle-outer-x), var(--particle-outer-y), 0) scale(0.4); } 40% { opacity: 0.58; } 72% { opacity: 0.2; transform: translate3d(var(--particle-x), var(--particle-y), 0) scale(1); } }
 @keyframes status-pulse { 0%, 100% { opacity: 0.45; transform: scale(0.85); } 50% { opacity: 0.9; transform: scale(1.1); } }
 @keyframes core-orbit { to { transform: rotate(360deg); } }
-@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-@keyframes detail-in { from { opacity: 0; transform: translate3d(0, 12px, 0) scale(0.985); } to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); } }
 
 @media (min-width: 1500px) {
   .ecosystem { padding-top: 150px; }
