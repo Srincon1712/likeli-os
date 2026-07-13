@@ -63,18 +63,12 @@ export function Shell({ activeView, onViewChange, children, health, currentOS = 
         >
           <div className="flex items-center justify-between gap-4 lg:block">
             <div>
-              {!isLifeOS ? <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-signal">Private System</div> : null}
               <h1 className={`${isLifeOS ? '' : 'mt-1.5'} text-xl font-semibold tracking-normal`}>
                 <button type="button" onClick={onToggleOS} className="block bg-transparent p-0 text-left text-inherit hover:text-white">
                   {isLifeOS ? 'Life OS' : 'Likeli OS'}
                 </button>
               </h1>
             </div>
-            {!isLifeOS ? (
-              <div className="hidden rounded-md border border-signal/20 bg-signal/5 px-2 py-0.5 text-[10px] font-mono text-ice lg:inline-flex">
-                LOCAL
-              </div>
-            ) : null}
           </div>
 
           {isLifeOS ? (
