@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   ArrowLeft,
@@ -20,7 +20,7 @@ const LIFE_AREAS = [
   { id: 'projects', title: 'Proyectos', description: 'Intención que se convierte en impulso.', icon: Layers3, x: 72, y: 13, status: 'En marcha', progress: 52, notifications: 1 },
   { id: 'finance', title: 'Finanzas', description: 'Una visión clara de tus recursos.', icon: CircleDollarSign, x: 87, y: 36, status: 'En orden', progress: 84, notifications: 0 },
   { id: 'relationships', title: 'Relaciones', description: 'Las personas que enriquecen tu vida.', icon: Heart, x: 79, y: 75, status: '2 momentos', progress: 71, notifications: 2 },
-  { id: 'time', title: 'Tiempo', description: 'Atención colocada con intención.', icon: Timer, x: 52, y: 88, status: '6 h 42 min de enfoque', progress: 69, notifications: 0 },
+  { id: 'time', title: 'Tiempo', description: 'Atención colocada con intención.', icon: Timer, x: 52, y: 88, status: '6 h 42 min', progress: 69, notifications: 0 },
   { id: 'organization', title: 'Organización', description: 'Menos ruido. Más claridad.', icon: CalendarDays, x: 19, y: 75, status: 'En calma', progress: 91, notifications: 0 }
 ];
 
@@ -165,22 +165,155 @@ const NeuralBackground = memo(function NeuralBackground({ pointerRef }) {
   return <canvas ref={canvasRef} className="neural-canvas" aria-hidden="true" />;
 });
 
-const NeuralConnections = memo(function NeuralConnections({ activeId }) {
+function normalizeVector(x, y) {
+  const length = Math.hypot(x, y) || 1;
+  return { x: x / length, y: y / length };
+}
+
+function getRoundedRectAnchor(center, width, height, radius, target) {
+  const direction = normalizeVector(target.x - center.x, target.y - center.y);
+  const halfWidth = width / 2;
+  const halfHeight = height / 2;
+  const horizontalDistance = Math.abs(direction.x) > 0.0001 ? halfWidth / Math.abs(direction.x) : Infinity;
+  const verticalDistance = Math.abs(direction.y) > 0.0001 ? halfHeight / Math.abs(direction.y) : Infinity;
+  let distance = Math.min(horizontalDistance, verticalDistance);
+  let localX = direction.x * distance;
+  let localY = direction.y * distance;
+  let normal;
+
+  if (Math.abs(localX) > halfWidth - radius && Math.abs(localY) > halfHeight - radius) {
+    const corner = {
+      x: Math.sign(localX) * (halfWidth - radius),
+      y: Math.sign(localY) * (halfHeight - radius)
+    };
+    const projection = direction.x * corner.x + direction.y * corner.y;
+    const discriminant = Math.max(0, projection * projection - (corner.x * corner.x + corner.y * corner.y - radius * radius));
+    distance = projection + Math.sqrt(discriminant);
+    localX = direction.x * distance;
+    localY = direction.y * distance;
+    normal = normalizeVector(localX - corner.x, localY - corner.y);
+  } else if (horizontalDistance < verticalDistance) {
+    normal = { x: Math.sign(localX), y: 0 };
+  } else {
+    normal = { x: 0, y: Math.sign(localY) };
+  }
+
+  return {
+    point: { x: center.x + localX, y: center.y + localY },
+    outward: normal
+  };
+}
+
+const CONNECTION_BENDS = {
+  individual: -0.018,
+  knowledge: 0.026,
+  projects: -0.022,
+  finance: 0.016,
+  relationships: -0.022,
+  time: 0.018,
+  organization: 0.024
+};
+
+function createConnectionPath(coreCenter, coreRadius, cardCenter, cardRect, areaId) {
+  const direction = normalizeVector(cardCenter.x - coreCenter.x, cardCenter.y - coreCenter.y);
+  const start = {
+    x: coreCenter.x + direction.x * (coreRadius + 1),
+    y: coreCenter.y + direction.y * (coreRadius + 1)
+  };
+  const anchor = getRoundedRectAnchor(cardCenter, cardRect.width, cardRect.height, 20, coreCenter);
+  const end = anchor.point;
+  const distance = Math.hypot(end.x - start.x, end.y - start.y);
+  const normal = { x: -direction.y, y: direction.x };
+  const bend = distance * (CONNECTION_BENDS[areaId] || 0);
+  const midpoint = {
+    x: (start.x + end.x) / 2 + normal.x * bend,
+    y: (start.y + end.y) / 2 + normal.y * bend
+  };
+  const tangent = {
+    x: direction.x * Math.min(52, distance * 0.18),
+    y: direction.y * Math.min(52, distance * 0.18)
+  };
+  const startHandle = Math.min(74, distance * 0.28);
+  const endHandle = Math.min(64, distance * 0.24);
+  const firstControl = {
+    x: start.x + direction.x * startHandle,
+    y: start.y + direction.y * startHandle
+  };
+  const secondControl = { x: midpoint.x - tangent.x, y: midpoint.y - tangent.y };
+  const thirdControl = { x: midpoint.x + tangent.x, y: midpoint.y + tangent.y };
+  const fourthControl = {
+    x: end.x + anchor.outward.x * endHandle,
+    y: end.y + anchor.outward.y * endHandle
+  };
+  const number = (value) => value.toFixed(2);
+
+  return {
+    path: `M ${number(start.x)} ${number(start.y)} C ${number(firstControl.x)} ${number(firstControl.y)}, ${number(secondControl.x)} ${number(secondControl.y)}, ${number(midpoint.x)} ${number(midpoint.y)} C ${number(thirdControl.x)} ${number(thirdControl.y)}, ${number(fourthControl.x)} ${number(fourthControl.y)}, ${number(end.x)} ${number(end.y)}`,
+    end
+  };
+}
+
+const NeuralConnections = memo(function NeuralConnections({ activeId, mapRef }) {
+  const [geometry, setGeometry] = useState({ width: 0, height: 0, connections: [] });
+
+  useLayoutEffect(() => {
+    const map = mapRef.current;
+    if (!map) return undefined;
+
+    function measure() {
+      const mapRect = map.getBoundingClientRect();
+      const core = map.querySelector('[data-core]');
+      if (!core || window.matchMedia('(max-width: 700px)').matches) {
+        setGeometry({ width: mapRect.width, height: mapRect.height, connections: [] });
+        return;
+      }
+      const coreRect = core.getBoundingClientRect();
+      const coreCenter = {
+        x: coreRect.left - mapRect.left + coreRect.width / 2,
+        y: coreRect.top - mapRect.top + coreRect.height / 2
+      };
+      const connections = LIFE_AREAS.map((area) => {
+        const card = map.querySelector(`[data-area-id="${area.id}"]`);
+        if (!card) return null;
+        const cardRect = card.getBoundingClientRect();
+        const cardCenter = {
+          x: cardRect.left - mapRect.left + cardRect.width / 2,
+          y: cardRect.top - mapRect.top + cardRect.height / 2
+        };
+        return {
+          id: area.id,
+          ...createConnectionPath(coreCenter, coreRect.width / 2, cardCenter, cardRect, area.id)
+        };
+      }).filter(Boolean);
+      setGeometry({ width: mapRect.width, height: mapRect.height, connections });
+    }
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(map);
+    window.addEventListener('resize', measure, { passive: true });
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [mapRef]);
+
+  if (!geometry.connections.length) return null;
+
   return (
-    <svg className="connection-layer" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-      {LIFE_AREAS.map((area) => {
-        const controlX = area.x > 50 ? 58 : 42;
-        const controlY = area.y > 50 ? 59 : 41;
-        const path = `M 50 50 C ${controlX} ${controlY}, ${controlX} ${controlY}, ${area.x} ${area.y}`;
+    <svg className="connection-layer" viewBox={`0 0 ${geometry.width} ${geometry.height}`} aria-hidden="true">
+      {geometry.connections.map((connection, index) => {
+        const active = activeId === connection.id;
         return (
-          <g key={area.id}>
-            <path
-              className={activeId === area.id ? 'connection is-active' : 'connection'}
-              d={path}
-              pathLength="1"
-            />
-            <circle className="connection-particle" r="0.17">
-              <animateMotion path={path} dur="9s" begin={`${LIFE_AREAS.indexOf(area) * -1.15}s`} repeatCount="indefinite" />
+          <g key={connection.id} className={active ? 'connection-group is-active' : 'connection-group'}>
+            <path className="fiber-halo" d={connection.path} pathLength="1" vectorEffect="non-scaling-stroke" />
+            <path className="connection" d={connection.path} pathLength="1" vectorEffect="non-scaling-stroke" />
+            <circle className="connection-anchor" cx={connection.end.x} cy={connection.end.y} r="2.2" vectorEffect="non-scaling-stroke" />
+            <circle className="connection-particle" r="1.15">
+              <animateMotion path={connection.path} dur="10s" begin={`${index * -1.35}s`} repeatCount="indefinite" />
+            </circle>
+            <circle className="connection-particle connection-particle-active" r="1.65">
+              <animateMotion path={connection.path} dur="4.8s" begin={`${index * -0.55}s`} repeatCount="indefinite" />
             </circle>
           </g>
         );
@@ -194,6 +327,7 @@ const LifeNode = memo(function LifeNode({ area, index, active, onHover, onLeave,
   return (
     <button
       className={`life-node ${active ? 'is-active' : ''}`}
+      data-area-id={area.id}
       style={{
         left: `${area.x}%`,
         top: `${area.y}%`,
@@ -218,10 +352,11 @@ const LifeNode = memo(function LifeNode({ area, index, active, onHover, onLeave,
   );
 });
 
-const CoreNode = memo(function CoreNode({ onSelect }) {
+const CoreNode = memo(function CoreNode({ active, onSelect }) {
   return (
     <button
-      className="core-node"
+      className={`core-node ${active ? 'is-related' : ''}`}
+      data-core
       onClick={() => onSelect({ title: 'Núcleo', description: 'Tu vida, contemplada como un todo conectado.' })}
     >
       <span className="core-wave core-wave-one" />
@@ -229,6 +364,8 @@ const CoreNode = memo(function CoreNode({ onSelect }) {
       <span className="core-particles" aria-hidden="true">
         {Array.from({ length: 6 }, (_, index) => <i key={index} style={{ '--particle-delay': `${index * -1.3}s` }} />)}
       </span>
+      <span className="core-orbit" aria-hidden="true"><i /><i /><i /></span>
+      <span className="core-inner-ring" />
       <span className="core-surface" />
       <span className="core-title">NÚCLEO</span>
       <span className="core-caption">Todo se conecta aquí</span>
@@ -269,6 +406,16 @@ function App() {
   useEffect(() => {
     const interval = window.setInterval(() => setMoment(getMoment(new Date())), 60_000);
     return () => window.clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (!window.location.hash) return undefined;
+    const frame = requestAnimationFrame(() => {
+      const target = document.getElementById(decodeURIComponent(window.location.hash.slice(1)));
+      target?.closest('.ecosystem')?.classList.add('is-visible');
+      target?.scrollIntoView({ behavior: 'auto', block: 'start' });
+    });
+    return () => cancelAnimationFrame(frame);
   }, []);
 
   useEffect(() => {
@@ -333,14 +480,14 @@ function App() {
         <div className="scroll-cue" aria-hidden="true"><span />Tu vida, en una sola mirada</div>
       </section>
 
-      <section ref={ecosystemRef} className="ecosystem" aria-labelledby="ecosystem-title">
+      <section id="ecosistema" ref={ecosystemRef} className="ecosystem" aria-labelledby="titulo-ecosistema">
         <div className="section-heading">
           <p>Tu mundo</p>
-          <h2 id="ecosystem-title">Todo lo que importa,<br />conectado.</h2>
+          <h2 id="titulo-ecosistema">Todo lo que importa,<br />conectado.</h2>
         </div>
 
         <div ref={mapRef} className="life-map">
-          <NeuralConnections activeId={activeId} />
+          <NeuralConnections activeId={activeId} mapRef={mapRef} />
           {LIFE_AREAS.map((area, index) => (
             <LifeNode
               key={area.id}
@@ -352,7 +499,7 @@ function App() {
               onSelect={handleSelectArea}
             />
           ))}
-          <CoreNode onSelect={handleSelectArea} />
+          <CoreNode active={Boolean(activeId)} onSelect={handleSelectArea} />
         </div>
 
         <div className="quiet-summary">

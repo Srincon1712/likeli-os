@@ -131,7 +131,8 @@ a { text-decoration: none; }
   transition: opacity 900ms 120ms ease, transform 1100ms 120ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.ecosystem.is-visible .section-heading { opacity: 1; transform: translate3d(0, 0, 0); }
+.ecosystem.is-visible .section-heading,
+.ecosystem:target .section-heading { opacity: 1; transform: translate3d(0, 0, 0); }
 .section-heading p { margin: 0 0 14px; color: #71848d; font-size: 12px; }
 .section-heading h2 { margin: 0; color: #dce7ea; font-size: clamp(32px, 4vw, 55px); font-weight: 500; letter-spacing: -0.045em; line-height: 1.08; }
 
@@ -150,29 +151,49 @@ a { text-decoration: none; }
   will-change: transform, opacity;
 }
 
-.ecosystem.is-visible .life-map { opacity: 1; transform: translate3d(var(--camera-x), var(--camera-y), 0) scale(1); }
-.connection-layer { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.ecosystem.is-visible .life-map,
+.ecosystem:target .life-map { opacity: 1; transform: translate3d(var(--camera-x), var(--camera-y), 0) scale(1); }
+.connection-layer { position: absolute; z-index: 2; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.fiber-halo,
 .connection {
   fill: none;
-  stroke: rgba(133, 189, 206, 0.16);
-  stroke-width: 0.1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
   stroke-dasharray: 1;
   stroke-dashoffset: 1;
-  transition: stroke 500ms ease, stroke-width 500ms ease;
 }
-.connection.is-active { stroke: rgba(167, 222, 236, 0.58); stroke-width: 0.16; }
-.ecosystem.is-visible .connection { animation: connection-build 1500ms 240ms cubic-bezier(0.22, 1, 0.36, 1) forwards; }
-.connection-layer g:nth-child(2) .connection { animation-delay: 310ms; }
-.connection-layer g:nth-child(3) .connection { animation-delay: 380ms; }
-.connection-layer g:nth-child(4) .connection { animation-delay: 450ms; }
-.connection-layer g:nth-child(5) .connection { animation-delay: 520ms; }
-.connection-layer g:nth-child(6) .connection { animation-delay: 590ms; }
-.connection-layer g:nth-child(7) .connection { animation-delay: 660ms; }
-.connection-particle { fill: rgba(202, 235, 243, 0.66); opacity: 0; }
-.ecosystem.is-visible .connection-particle { animation: particle-materialize 900ms 1250ms ease forwards; }
+.fiber-halo { stroke: rgba(112, 188, 210, 0.075); stroke-width: 3px; opacity: 0.65; transition: stroke 520ms ease, opacity 520ms ease; animation: fiber-breathe 8s ease-in-out infinite; }
+.connection { stroke: rgba(154, 207, 220, 0.31); stroke-width: 0.8px; transition: stroke 520ms ease, stroke-width 520ms ease; }
+.connection-group.is-active .fiber-halo { stroke: rgba(129, 211, 231, 0.2); opacity: 1; }
+.connection-group.is-active .connection { stroke: rgba(190, 233, 242, 0.72); stroke-width: 1px; }
+.ecosystem.is-visible .fiber-halo,
+.ecosystem:target .fiber-halo,
+.ecosystem.is-visible .connection,
+.ecosystem:target .connection { animation-name: connection-build, fiber-breathe; animation-duration: 1500ms, 8s; animation-delay: 240ms, 1500ms; animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1), ease-in-out; animation-fill-mode: forwards, none; animation-iteration-count: 1, infinite; }
+.ecosystem.is-visible .connection,
+.ecosystem:target .connection { animation-name: connection-build; animation-duration: 1500ms; animation-delay: 240ms; animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); animation-fill-mode: forwards; animation-iteration-count: 1; }
+.connection-layer g:nth-child(2) .fiber-halo, .connection-layer g:nth-child(2) .connection { animation-delay: 310ms, 1570ms; }
+.connection-layer g:nth-child(3) .fiber-halo, .connection-layer g:nth-child(3) .connection { animation-delay: 380ms, 1640ms; }
+.connection-layer g:nth-child(4) .fiber-halo, .connection-layer g:nth-child(4) .connection { animation-delay: 450ms, 1710ms; }
+.connection-layer g:nth-child(5) .fiber-halo, .connection-layer g:nth-child(5) .connection { animation-delay: 520ms, 1780ms; }
+.connection-layer g:nth-child(6) .fiber-halo, .connection-layer g:nth-child(6) .connection { animation-delay: 590ms, 1850ms; }
+.connection-layer g:nth-child(7) .fiber-halo, .connection-layer g:nth-child(7) .connection { animation-delay: 660ms, 1920ms; }
+.connection-anchor { fill: rgba(183, 224, 234, 0.72); stroke: rgba(109, 184, 204, 0.2); stroke-width: 3px; opacity: 0; transition: fill 500ms ease, stroke 500ms ease; }
+.ecosystem.is-visible .connection-anchor,
+.ecosystem:target .connection-anchor { animation: anchor-materialize 500ms 1320ms ease forwards; }
+.connection-group.is-active .connection-anchor { fill: rgba(219, 243, 248, 0.95); stroke: rgba(145, 217, 234, 0.35); }
+.connection-particle { fill: rgba(202, 235, 243, 0.72); opacity: 0; }
+.ecosystem.is-visible .connection-particle,
+.ecosystem:target .connection-particle { animation: particle-materialize 900ms 1250ms ease forwards; }
+.connection-particle-active { fill: rgba(225, 247, 251, 0.96); opacity: 0; filter: drop-shadow(0 0 2px rgba(164, 226, 239, 0.5)); }
+.ecosystem.is-visible .connection-particle-active,
+.ecosystem:target .connection-particle-active { opacity: 0; animation: none; }
+.ecosystem.is-visible .connection-group.is-active .connection-particle-active,
+.ecosystem:target .connection-group.is-active .connection-particle-active { animation: active-particle-in 420ms ease forwards; }
 
 .life-node {
   position: absolute;
+  z-index: 5;
   display: flex;
   width: 184px;
   min-height: 78px;
@@ -194,7 +215,8 @@ a { text-decoration: none; }
   contain: layout paint;
 }
 
-.ecosystem.is-visible .life-node {
+.ecosystem.is-visible .life-node,
+.ecosystem:target .life-node {
   animation: node-reveal 820ms var(--reveal-delay) ease forwards;
 }
 
@@ -227,10 +249,10 @@ a { text-decoration: none; }
 }
 
 .life-node:hover, .life-node:focus-visible, .life-node.is-active {
-  z-index: 3;
+  z-index: 6;
   border-color: rgba(200, 235, 243, 0.24);
   background: linear-gradient(145deg, rgba(217, 242, 247, 0.11), rgba(21, 40, 51, 0.4));
-  transform: translate3d(-50%, calc(-50% - 3px), 0) scale(1.018);
+  transform: translate3d(-50%, -50%, 0);
 }
 
 .node-icon {
@@ -254,6 +276,7 @@ a { text-decoration: none; }
 
 .core-node {
   position: absolute;
+  z-index: 4;
   top: 50%;
   left: 50%;
   display: flex;
@@ -276,7 +299,7 @@ a { text-decoration: none; }
 
 .core-surface { position: absolute; z-index: 0; inset: 0; overflow: hidden; border-radius: 50%; background: radial-gradient(circle at 35% 27%, rgba(232, 249, 252, 0.105), transparent 43%); animation: core-light 9s ease-in-out infinite; }
 .core-surface::before { position: absolute; top: -30%; left: -45%; width: 72%; height: 160%; background: linear-gradient(90deg, transparent, rgba(236, 250, 252, 0.1), transparent); content: ""; transform: translate3d(calc(24px + var(--reflection-x)), var(--reflection-y), 0) rotate(18deg); transition: transform 1200ms cubic-bezier(0.22, 1, 0.36, 1); will-change: transform; }
-.core-node:hover, .core-node:focus-visible { border-color: rgba(218, 243, 248, 0.32); transform: translate3d(-50%, -50%, 0) scale(1.018); }
+.core-node:hover, .core-node:focus-visible, .core-node.is-related { border-color: rgba(218, 243, 248, 0.3); transform: translate3d(-50%, -50%, 0); }
 .core-title { position: relative; z-index: 2; color: #eef6f7; font-size: 19px; font-weight: 560; letter-spacing: 0.11em; }
 .core-caption { position: relative; z-index: 2; margin-top: 8px; color: #74878f; font-size: 10px; }
 .core-status { position: relative; z-index: 2; width: 4px; height: 4px; margin-top: 15px; border-radius: 50%; background: #a4d9e4; opacity: 0.75; animation: status-pulse 4.8s ease-in-out infinite; }
@@ -289,6 +312,13 @@ a { text-decoration: none; }
 .core-particles i:nth-child(4) { --particle-x: 0px; --particle-y: 30px; --particle-outer-x: 0px; --particle-outer-y: 50px; }
 .core-particles i:nth-child(5) { --particle-x: -29px; --particle-y: 17px; --particle-outer-x: -48px; --particle-outer-y: 28px; }
 .core-particles i:nth-child(6) { --particle-x: -29px; --particle-y: -17px; --particle-outer-x: -48px; --particle-outer-y: -28px; }
+.core-orbit { position: absolute; z-index: 1; inset: -19px; border-radius: 50%; opacity: 0.42; animation: core-orbit 26s linear infinite; pointer-events: none; }
+.core-orbit i { position: absolute; width: 2px; height: 2px; border-radius: 50%; background: rgba(207, 238, 244, 0.82); }
+.core-orbit i:nth-child(1) { top: 5px; left: 50%; }
+.core-orbit i:nth-child(2) { right: 15px; bottom: 20%; opacity: 0.55; }
+.core-orbit i:nth-child(3) { bottom: 20px; left: 12%; opacity: 0.35; }
+.core-inner-ring { position: absolute; z-index: 1; inset: 13px; border: 1px solid rgba(220, 242, 247, 0.075); border-radius: 50%; box-shadow: inset 0 0 25px rgba(143, 207, 222, 0.035); pointer-events: none; }
+.core-node.is-related .core-status { opacity: 1; transform: scale(1.12); }
 
 .quiet-summary {
   display: grid;
@@ -301,7 +331,8 @@ a { text-decoration: none; }
   transition: opacity 900ms 600ms ease, transform 1000ms 600ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.ecosystem.is-visible .quiet-summary { opacity: 1; transform: translate3d(0, 0, 0); }
+.ecosystem.is-visible .quiet-summary,
+.ecosystem:target .quiet-summary { opacity: 1; transform: translate3d(0, 0, 0); }
 .quiet-summary article { min-height: 126px; padding: 24px 26px; border: 1px solid rgba(220, 242, 247, 0.08); border-radius: 22px; background: rgba(198, 231, 239, 0.035); }
 .quiet-summary p { margin: 0 0 17px; color: #687b84; font-size: 11px; }
 .quiet-summary h3 { margin: 0 0 7px; color: #dce7e9; font-size: 18px; font-weight: 500; letter-spacing: -0.02em; }
@@ -338,7 +369,10 @@ a { text-decoration: none; }
 
 @keyframes welcome-in { from { opacity: 0; transform: translate3d(0, 15px, 0); } to { opacity: 1; transform: translate3d(0, 0, 0); } }
 @keyframes connection-build { to { stroke-dashoffset: 0; } }
+@keyframes fiber-breathe { 0%, 100% { opacity: 0.45; } 50% { opacity: 0.78; } }
 @keyframes particle-materialize { to { opacity: 0.72; } }
+@keyframes active-particle-in { to { opacity: 0.92; } }
+@keyframes anchor-materialize { to { opacity: 0.88; } }
 @keyframes node-reveal { from { opacity: 0; } to { opacity: 1; } }
 @keyframes card-light { 0%, 100% { opacity: 0.18; } 50% { opacity: 0.52; } }
 @keyframes progress-breathe { 0%, 100% { opacity: 0.48; transform: scaleX(0.985); } 50% { opacity: 0.95; transform: scaleX(1); } }
@@ -346,6 +380,7 @@ a { text-decoration: none; }
 @keyframes core-wave { 0% { opacity: 0; transform: scale(0.96); } 18% { opacity: 0.3; } 70%, 100% { opacity: 0; transform: scale(1.28); } }
 @keyframes core-particle { 0%, 100% { opacity: 0; transform: translate3d(var(--particle-outer-x), var(--particle-outer-y), 0) scale(0.4); } 40% { opacity: 0.58; } 72% { opacity: 0.2; transform: translate3d(var(--particle-x), var(--particle-y), 0) scale(1); } }
 @keyframes status-pulse { 0%, 100% { opacity: 0.45; transform: scale(0.85); } 50% { opacity: 0.9; transform: scale(1.1); } }
+@keyframes core-orbit { to { transform: rotate(360deg); } }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes detail-in { from { opacity: 0; transform: translate3d(0, 12px, 0) scale(0.985); } to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); } }
 
