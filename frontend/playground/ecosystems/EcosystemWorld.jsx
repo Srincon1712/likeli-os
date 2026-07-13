@@ -31,6 +31,8 @@ const SYSTEM_ICONS = {
   organization: CalendarDays
 };
 
+const IndividualOS = React.lazy(() => import('./individual/IndividualOS.jsx'));
+
 function useDailyRecords() {
   const [records, setRecords] = useState(loadDailyRecords);
   useEffect(() => {
@@ -38,10 +40,12 @@ function useDailyRecords() {
     const handleVisibility = () => { if (!document.hidden) refresh(); };
     window.addEventListener('storage', refresh);
     window.addEventListener('focus', refresh);
+    window.addEventListener('life-os:daily-compliance-updated', refresh);
     document.addEventListener('visibilitychange', handleVisibility);
     return () => {
       window.removeEventListener('storage', refresh);
       window.removeEventListener('focus', refresh);
+      window.removeEventListener('life-os:daily-compliance-updated', refresh);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, []);
@@ -260,10 +264,19 @@ export default function EcosystemWorld({ system, onClose }) {
   useEffect(() => () => window.clearTimeout(closeTimerRef.current), []);
 
   useEffect(() => {
+    if (config.id === 'individual') return undefined;
     const handleKey = (event) => { if (event.key === 'Escape') close(); };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [close]);
+  }, [close, config.id]);
+
+  if (config.id === 'individual') {
+    return (
+      <React.Suspense fallback={<div className="world-loading"><span />Construyendo tu estado…</div>}>
+        <IndividualOS system={system} records={records} closing={closing} onClose={close} />
+      </React.Suspense>
+    );
+  }
 
   return (
     <section

@@ -1,4 +1,4 @@
-import React, { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   ArrowLeft,
@@ -11,6 +11,7 @@ import {
   UserRound
 } from 'lucide-react';
 import './styles.css';
+import { getPendingDates, readRecords, RECORDS_EVENT } from './ecosystems/individual/pending.js';
 
 const EcosystemWorld = lazy(() => import('./ecosystems/EcosystemWorld.jsx'));
 
@@ -322,7 +323,7 @@ const NeuralConnections = memo(function NeuralConnections({ activeId, mapRef }) 
   );
 });
 
-const LifeNode = memo(function LifeNode({ area, index, active, onHover, onLeave, onSelect }) {
+const LifeNode = memo(function LifeNode({ area, index, active, notifications, onHover, onLeave, onSelect }) {
   const Icon = area.icon;
   return (
     <button
@@ -348,6 +349,7 @@ const LifeNode = memo(function LifeNode({ area, index, active, onHover, onLeave,
         <span className="node-status">{area.status}</span>
       </span>
       <span className="node-progress" />
+      {notifications > 0 ? <span className="node-notification" aria-label={`${notifications} días pendientes`}>{notifications > 99 ? '99+' : notifications}</span> : null}
     </button>
   );
 });
@@ -382,6 +384,12 @@ function App() {
   const [activeId, setActiveId] = useState(null);
   const [selected, setSelected] = useState(null);
   const [moment, setMoment] = useState(() => getMoment(new Date()));
+  const [individualPending, setIndividualPending] = useState(() => getPendingDates(readRecords()).length);
+  const lifeAreas = useMemo(() => LIFE_AREAS.map((area) => area.id === 'individual' ? {
+    ...area,
+    status: individualPending ? `${individualPending} ${individualPending === 1 ? 'día pendiente' : 'días pendientes'}` : 'Todo al día',
+    progress: individualPending ? 0 : 100
+  } : area), [individualPending]);
   const handleLeaveArea = useCallback(() => setActiveId(null), []);
   const handleSelectArea = useCallback((area) => setSelected(area), []);
   const handleCloseDetail = useCallback(() => setSelected(null), []);
@@ -389,6 +397,20 @@ function App() {
   useEffect(() => {
     const interval = window.setInterval(() => setMoment(getMoment(new Date())), 60_000);
     return () => window.clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const refreshPending = () => setIndividualPending(getPendingDates(readRecords()).length);
+    const interval = window.setInterval(refreshPending, 60_000);
+    window.addEventListener('storage', refreshPending);
+    window.addEventListener(RECORDS_EVENT, refreshPending);
+    window.addEventListener('focus', refreshPending);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('storage', refreshPending);
+      window.removeEventListener(RECORDS_EVENT, refreshPending);
+      window.removeEventListener('focus', refreshPending);
+    };
   }, []);
 
   useEffect(() => {
@@ -479,12 +501,13 @@ function App() {
 
         <div ref={mapRef} className="life-map">
           <NeuralConnections activeId={activeId} mapRef={mapRef} />
-          {LIFE_AREAS.map((area, index) => (
+          {lifeAreas.map((area, index) => (
             <LifeNode
               key={area.id}
               area={area}
               index={index}
               active={activeId === area.id}
+              notifications={area.id === 'individual' ? individualPending : 0}
               onHover={setActiveId}
               onLeave={handleLeaveArea}
               onSelect={handleSelectArea}

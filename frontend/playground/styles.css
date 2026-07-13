@@ -249,6 +249,8 @@ a { text-decoration: none; }
   pointer-events: none;
 }
 
+.node-notification { position: absolute; z-index: 5; top: -7px; right: -7px; display: grid; min-width: 20px; height: 20px; padding: 0 6px; place-items: center; border: 2px solid #09131b; border-radius: 999px; color: #fff; background: #d94f59; box-shadow: 0 3px 12px rgba(158, 35, 45, .3); font-size: 9px; font-weight: 650; line-height: 1; }
+
 .life-node:hover, .life-node:focus-visible, .life-node.is-active {
   z-index: 6;
   border-color: rgba(200, 235, 243, 0.24);
