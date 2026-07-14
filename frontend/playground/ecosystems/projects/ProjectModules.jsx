@@ -5,7 +5,7 @@ import {
   ListChecks, MessageSquarePlus, Paperclip, Plus, Search, Sparkles, Star,
   Table2, Trash2, Undo2, Video, X
 } from 'lucide-react';
-import { createId, createProject, loadProjects, updateProject } from './projectsData.js';
+import { createId, createProject, deleteProject, loadProjects, updateProject } from './projectsData.js';
 import { deleteStoredFile, getStoredFile, storeFile } from './fileStore.js';
 
 const COLUMN_TYPES = ['Texto', 'Número', 'Fecha', 'Estado', 'Casilla', 'Etiqueta', 'Persona', 'Archivo', 'URL', 'Lista', 'Moneda', 'Progreso', 'Relación', 'Fórmula'];
@@ -182,7 +182,8 @@ export function IntelligenceEditor({ project, module, onChange }) {
 export function SubprojectsEditor({ project, module, onChange }) {
   const all = loadProjects(); const ids = module.content?.projectIds || []; const children = ids.map((id) => all.find((item) => item.id === id)).filter(Boolean);
   const create = () => { const title = window.prompt('Nombre del subproyecto'); if (!title) return; const created = createProject({ title, description: `Subproyecto de ${project.title}` })[0]; onChange({ content: { ...module.content, projectIds: [...ids, created.id] } }, 'Subproyecto conectado'); };
-  return <div className="subprojects-v1"><button className="primary-module-action" onClick={create}><Plus size={13} /> Crear subproyecto</button><div>{children.map((child, index) => <article key={child.id} style={{ '--subproject-index': index }}><span><i /></span><section><strong>{child.title}</strong><small>{child.modules.length} módulos · {child.description}</small></section><button onClick={() => onChange({ content: { ...module.content, projectIds: ids.filter((id) => id !== child.id) } }, 'Subproyecto desconectado')}><X size={11} /></button></article>)}</div>{!children.length ? <p>Divide el universo sin perder su procedencia.</p> : null}</div>;
+  const remove = (child) => { if (!window.confirm(`¿Eliminar definitivamente el subproyecto “${child.title}”? Esta acción no se puede deshacer.`)) return; deleteProject(child.id); onChange({ content: { ...module.content, projectIds: ids.filter((id) => id !== child.id) } }, 'Subproyecto eliminado'); };
+  return <div className="subprojects-v1"><button className="primary-module-action" onClick={create}><Plus size={13} /> Crear subproyecto</button><div>{children.map((child, index) => <article key={child.id} style={{ '--subproject-index': index }}><span><i /></span><section><strong>{child.title}</strong><small>{child.modules.length} módulos · {child.description}</small></section><button className="subproject-delete" title={`Eliminar ${child.title}`} aria-label={`Eliminar definitivamente ${child.title}`} onClick={() => remove(child)}><Trash2 size={11} /></button></article>)}</div>{!children.length ? <p>Divide el universo sin perder su procedencia.</p> : null}</div>;
 }
 
 function salesMetrics(leads, calls) {

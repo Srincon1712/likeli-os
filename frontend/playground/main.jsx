@@ -458,8 +458,6 @@ function App() {
         const y = (pointerRef.current.y / window.innerHeight - 0.5) * -2;
         mapRef.current?.style.setProperty('--camera-x', `${x}px`);
         mapRef.current?.style.setProperty('--camera-y', `${y}px`);
-        mapRef.current?.style.setProperty('--reflection-x', `${-x * 2.6}px`);
-        mapRef.current?.style.setProperty('--reflection-y', `${-y * 2.6}px`);
         ambientRef.current?.style.setProperty('--ambient-x', `${-x * 3}px`);
         ambientRef.current?.style.setProperty('--ambient-y', `${-y * 3}px`);
         pendingFrame = 0;

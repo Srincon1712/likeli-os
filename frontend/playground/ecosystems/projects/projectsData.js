@@ -154,7 +154,13 @@ export function updateProject(projectId, reason, updater, options = {}) {
 }
 
 export function deleteProject(projectId) {
-  return saveProjects(loadProjects().filter((project) => project.id !== projectId));
+  const projects = loadProjects().filter((project) => project.id !== projectId).map((project) => ({
+    ...project,
+    modules: project.modules.map((module) => module.type === 'subprojects'
+      ? { ...module, content: { ...module.content, projectIds: (module.content?.projectIds || []).filter((id) => id !== projectId) } }
+      : module)
+  }));
+  return saveProjects(projects);
 }
 
 export function addModule(projectId, type) {
