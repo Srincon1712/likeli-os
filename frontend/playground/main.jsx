@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import './styles.css';
 import { getPendingDates, readRecords, RECORDS_EVENT } from './ecosystems/individual/pending.js';
+import { PROJECTS_EVENT, readProjectCount } from './ecosystems/projects/summary.js';
 
 const EcosystemWorld = lazy(() => import('./ecosystems/EcosystemWorld.jsx'));
 
@@ -385,11 +386,16 @@ function App() {
   const [selected, setSelected] = useState(null);
   const [moment, setMoment] = useState(() => getMoment(new Date()));
   const [individualPending, setIndividualPending] = useState(() => getPendingDates(readRecords()).length);
+  const [projectCount, setProjectCount] = useState(readProjectCount);
   const lifeAreas = useMemo(() => LIFE_AREAS.map((area) => area.id === 'individual' ? {
     ...area,
     status: individualPending ? `${individualPending} ${individualPending === 1 ? 'día pendiente' : 'días pendientes'}` : 'Todo al día',
     progress: individualPending ? 0 : 100
-  } : area), [individualPending]);
+  } : area.id === 'projects' ? {
+    ...area,
+    status: projectCount ? `${projectCount} ${projectCount === 1 ? 'universo activo' : 'universos activos'}` : 'Sin proyectos',
+    progress: projectCount ? 100 : 0
+  } : area), [individualPending, projectCount]);
   const handleLeaveArea = useCallback(() => setActiveId(null), []);
   const handleSelectArea = useCallback((area) => setSelected(area), []);
   const handleCloseDetail = useCallback(() => setSelected(null), []);
@@ -397,6 +403,16 @@ function App() {
   useEffect(() => {
     const interval = window.setInterval(() => setMoment(getMoment(new Date())), 60_000);
     return () => window.clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const refreshProjects = () => setProjectCount(readProjectCount());
+    window.addEventListener(PROJECTS_EVENT, refreshProjects);
+    window.addEventListener('storage', refreshProjects);
+    return () => {
+      window.removeEventListener(PROJECTS_EVENT, refreshProjects);
+      window.removeEventListener('storage', refreshProjects);
+    };
   }, []);
 
   useEffect(() => {

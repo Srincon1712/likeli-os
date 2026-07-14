@@ -32,6 +32,7 @@ const SYSTEM_ICONS = {
 };
 
 const IndividualOS = React.lazy(() => import('./individual/IndividualOS.jsx'));
+const ProjectsOS = React.lazy(() => import('./projects/ProjectsOS.jsx'));
 
 function useDailyRecords() {
   const [records, setRecords] = useState(loadDailyRecords);
@@ -264,7 +265,7 @@ export default function EcosystemWorld({ system, onClose }) {
   useEffect(() => () => window.clearTimeout(closeTimerRef.current), []);
 
   useEffect(() => {
-    if (config.id === 'individual') return undefined;
+    if (config.id === 'individual' || config.id === 'projects') return undefined;
     const handleKey = (event) => { if (event.key === 'Escape') close(); };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
@@ -274,6 +275,14 @@ export default function EcosystemWorld({ system, onClose }) {
     return (
       <React.Suspense fallback={<div className="world-loading"><span />Construyendo tu estado…</div>}>
         <IndividualOS system={system} records={records} closing={closing} onClose={close} />
+      </React.Suspense>
+    );
+  }
+
+  if (config.id === 'projects') {
+    return (
+      <React.Suspense fallback={<div className="world-loading"><span />Construyendo tus universos…</div>}>
+        <ProjectsOS system={system} closing={closing} onClose={close} />
       </React.Suspense>
     );
   }
